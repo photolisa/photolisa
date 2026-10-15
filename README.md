@@ -26,13 +26,10 @@
     <img src="interface.png" alt="Photolisa interface">
 </p>
 
----
-
 Photolisa is a free, open-source photo editor built with **TypeScript** and **Vue.js**, chosen for their simplicity and accessibility to developers. Released under the **MIT License**. Тhe project combines hand-written code with some AI-assisted development.
 
 Photolisa is still under active development. Some features are unfinished or planned for future releases. Check [Releases](https://github.com/photolisa/photolisa/releases) and [Issues](https://github.com/photolisa/photolisa/issues) for the latest updates.
 
----
 
 ## 🗺️ Roadmap
 
@@ -41,7 +38,6 @@ Photolisa is still under active development. Some features are unfinished or pla
 - [ ] **Localization** — Introduce multilingual support to make Photolisa accessible worldwide.
 - [ ] Custom themes
 
----
 
 ## 🤝 Contributing
 
@@ -53,7 +49,6 @@ Contributions are always welcome! Whether you're reporting a bug, suggesting a f
 
 Every contribution, big or small, helps make Photolisa better. Thank you for being part of the project! ❤️
 
----
 
 ## 🚀 Getting started
 
