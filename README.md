@@ -1,7 +1,7 @@
 <p align="center">
 
 <a href="https://photolisa.com">
- <img src="logo.svg" height="50" width="50" alt="Photolisa" />
+ <img src="README/logo.svg" height="50" width="50" alt="Photolisa" />
 </a>
 
 </p>
@@ -23,7 +23,7 @@
 </div>
 
 <p align="center">
-    <img src="interface.png" alt="Photolisa interface">
+    <img src="README/interface.png" alt="Photolisa interface">
 </p>
 
 Photolisa is a free, open-source photo editor built with **TypeScript** and **Vue.js**, chosen for their simplicity and accessibility to developers. Released under the **MIT License**. Тhe project combines hand-written code with some AI-assisted development.
@@ -59,7 +59,6 @@ npm install
 npm run dev
 ```
 
----
 
 ## Special Thanks
 
@@ -77,3 +76,7 @@ npm run dev
 Photolisa is built with these open-source projects. Thank you to their maintainers and contributors. We welcome your contributions, too!
 
 We respect and appreciate the work of all developers. If you believe your license or rights have not been properly respected, or your project requires attribution, please contact us so we can address the issue and add the appropriate credit to the list above.
+
+<p align="center">
+    <img src="README/bottom.png" alt="Photolisa interface">
+</p>
