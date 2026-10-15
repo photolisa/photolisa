@@ -18,7 +18,7 @@
   <img alt="Contributions welcome" src="https://img.shields.io/badge/contributions-welcome-0f766e?style=flat-square" />
 </p>
 
-**[Photolisa.com](https://photolisa.com) · [Live APP](https://photolisa.com/app) · [Roadmap](#-roadmap) · [Contributing](#-contributing)**
+**[Photolisa.com](https://photolisa.com) · [Live APP](https://photolisa.com/app)**
 
 </div>
 
