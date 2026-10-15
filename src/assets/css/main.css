@@ -1,0 +1,110 @@
+@import 'tailwindcss';
+
+@theme static {
+--color-ui-bg: #1E1E1E;
+--color-ui-workspace: #181818;
+--color-ui-toolbar: #1E1E1E;
+--color-ui-panel: #242424;
+--color-ui-elevated: #303030;
+--color-ui-hover: #383838;
+--color-ui-active: #424242;
+--color-ui-border: #3D3D3D;
+--color-ui-text: #F5F5F5;
+--color-ui-secondary-text: #D4D4D4;
+--color-ui-muted: #888888;
+
+  /*--color-ui-bg: #0E1219;*/
+  /*--color-ui-workspace: #111720;*/
+  /*--color-ui-toolbar: #151B25;*/
+  /*--color-ui-panel: #1B2230;*/
+  /*--color-ui-elevated: #272F3D;*/
+  /*--color-ui-hover: #303B4E;*/
+  /*--color-ui-active: #34435E;*/
+  /*--color-ui-border: #394354;*/
+  /*--color-ui-text: #F3F6FC;*/
+  /*--color-ui-secondary-text: #ebeef1;*/
+  /*--color-ui-muted: #788496;*/
+
+  --color-accent: #619BFF;
+  --color-accent-hover: #85B2FF;
+  --color-success: #48C98D;
+  --color-warning: #FFC65D;
+  --color-danger: #FF6678;
+}
+
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-ui-muted) transparent;
+}
+
+html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+
+
+body {
+    @apply bg-ui-bg;
+}
+
+button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.checkerboard {
+  background-color: #f8f8f8;
+  background-image:
+    linear-gradient(45deg, #dedede 25%, transparent 25%),
+    linear-gradient(-45deg, #dedede 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #dedede 75%),
+    linear-gradient(-45deg, transparent 75%, #dedede 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+}
+
+.flex-center {
+    @apply flex items-center justify-center;
+}
+
+@layer components {
+
+    :root { color: var(--color-ui-text); }
+
+    .editor-shell { height: 100dvh; font-size: 12px; }
+    button { transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease; }
+    button:enabled { cursor: pointer; }
+    button:disabled { cursor: default; }
+    input[type='range'] { accent-color: var(--color-accent); height: 4px; }
+    input[type='checkbox'], input[type='radio'] { accent-color: var(--color-accent); }
+    .editor-shell input:not([type='range']):not([type='checkbox']):not([type='file']), .editor-shell select, .editor-shell textarea { border-radius: 6px; }
+    .editor-shell select { color: var(--color-ui-text); }
+    .editor-shell [role='dialog'] { max-height: calc(100dvh - 32px); overflow: auto; border-radius: 14px; border-color: var(--color-ui-border); box-shadow: 0 24px 64px #0006; }
+    .editor-shell [role='dialog'] button { border-radius: 6px; }
+    .editor-shell [data-layer-row] { margin: 2px 6px; border-radius: 7px; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+
+    /* Native form surfaces use the same dark tokens as the surrounding controls.
+       Color inputs and previews retain their document/sample colors. */
+    .editor-shell input:not([type='range']):not([type='checkbox']):not([type='radio']):not([type='file']):not([type='color']),
+    .editor-shell select, .editor-shell textarea {
+        background-color: var(--color-ui-elevated);
+    }
+    .editor-shell button:disabled, .editor-shell input:disabled,
+    .editor-shell select:disabled, .editor-shell textarea:disabled {
+        color: var(--color-ui-muted);
+    }
+    .editor-shell button.bg-accent:enabled, .editor-shell button.primary:enabled { color: var(--color-ui-bg); }
+    .editor-shell button.bg-accent:enabled:hover, .editor-shell button.primary:enabled:hover { background-color: var(--color-accent-hover); }
+    .editor-shell [aria-selected='true']:not([data-layer-row]),
+    .editor-shell .mode-switch [aria-pressed='true'],
+    .editor-shell .right-panels > div > button[aria-pressed='true'],
+    .editor-shell .right-panels > section > div > button.border-accent {
+        background-color: var(--color-ui-active);
+        color: var(--color-accent);
+    }
+}

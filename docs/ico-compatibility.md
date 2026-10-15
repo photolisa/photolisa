@@ -1,0 +1,7 @@
+# ICO compatibility
+
+Photolisa imports Windows `.ico` containers, not PNG files renamed to `.ico`. It lists embedded resolutions and opens the chosen entry as a raster document. PNG-compressed entries use browser decoding; uncompressed BMP/DIB entries use [`icojs` 0.17.0](https://github.com/egy186/icojs), MIT licensed. Supported uncompressed depths are 1, 4, 8, 24, and 32 bits per pixel with BI_RGB compression. Damaged images and unsupported encodings are reported as errors. ICO cursor resources (`.cur`) are not supported.
+
+Export writes a multi-image ICO with user-selected square sizes of 16, 24, 32, 48, 64, 128, and 256 pixels. Each entry contains PNG data with alpha. The entire visible document is composited at document resolution before staged, high-quality downsampling; non-square documents are fitted within a transparent square, never stretched. Export is bounded to source documents of 64 megapixels and ICO files of 32 MB. It is a flattened export: editable layers remain only in the native `.photolisa` project.
+
+Import rejects files over 32 MB, more than 128 entries, or over eight million aggregate declared pixels. Directory offsets, payload bounds, PNG dimensions, and BMP headers are checked before decoding. Decoder failures remain possible for corrupt compressed data. Browser color conversion follows `createImageBitmap` and Canvas 2D; ICC profile preservation and explicit color-management controls are not implemented. BMP entries at 256 pixels may fail in the third-party decoder; modern 256-pixel PNG entries are supported.
