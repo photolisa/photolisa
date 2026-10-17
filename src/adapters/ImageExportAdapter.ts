@@ -26,6 +26,21 @@ export class ImageExportAdapter {
     private readonly filters: FilterRegistry = filterRegistry,
   ) {}
 
+  /** Full-resolution local content for the canvas preview, sharing the export pipeline. */
+  async renderEffectLayer(layer: Layer, width: number, height: number): Promise<HTMLCanvasElement> {
+    this.documentWidth = width; this.documentHeight = height
+    const source = layer.kind === 'raster' && layer.pixelSourceId ? this.sources.get(layer.pixelSourceId) : null
+    const canvas = document.createElement('canvas')
+    canvas.width = source?.width ?? width; canvas.height = source?.height ?? height
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('2D canvas is unavailable for effect preview')
+    if (layer.kind === 'raster') {
+      const local = { ...layer }; delete local.crop
+      await this.drawRasterLayer(context, local)
+    } else if (layer.kind === 'group') await this.drawGroupLayer(context, layer)
+    return canvas
+  }
+
   async toPng(surface: RasterSurface): Promise<Blob> {
     return this.toBlob(surface, 'image/png')
   }

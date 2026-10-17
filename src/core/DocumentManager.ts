@@ -65,10 +65,16 @@ export class DocumentManager {
     return true
   }
 
+  showHome(): void {
+    if (this.activeId === null) return
+    this.activeId = null
+    this.notify()
+  }
+
   cycle(direction: 1 | -1): DocumentSession | null {
     if (!this.sessions.length) return null
     const index = this.sessions.findIndex((session) => session.id === this.activeId)
-    const next = (index + direction + this.sessions.length) % this.sessions.length
+    const next = index < 0 ? (direction === 1 ? 0 : this.sessions.length - 1) : (index + direction + this.sessions.length) % this.sessions.length
     const session = this.sessions[next]!
     this.activate(session.id)
     return session

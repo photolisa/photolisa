@@ -17,6 +17,7 @@ const fileFormats = [
   {name: "SVG", type: "ok"},
   {name: "PSD", type: "ok"},
   {name: "PDF", type: "ok"},
+  {name: "RAW", type: "soon"},
   {name: "GIF", type: "soon"},
   {name: "AI", type: "soon"},
   {name: "EPS", type: "soon"},
@@ -26,11 +27,7 @@ const fileFormats = [
 
 <template>
   <main class="relative min-h-0 min-w-0 flex-1 overflow-hidden"
-    @dragenter.prevent="onDragEnter"
-    @dragover.prevent
-    @dragleave.prevent="onDragLeave"
-    @drop.prevent="onDrop"
-  >
+    @dragenter.prevent="onDragEnter" @dragover.prevent @dragleave.prevent="onDragLeave" @drop.prevent="onDrop">
     <div ref="host" class="absolute inset-0" />
     <ObjectToolbar v-if="controls && document" :controls="controls" :vector-paint="vectorPaint" @action="onCanvasAction($event)" @paint="setObjectPaint" />
     <EditorEyedropperPreview v-if="samplePreview" :sample="samplePreview" />

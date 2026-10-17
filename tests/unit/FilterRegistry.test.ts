@@ -7,10 +7,10 @@ const pixel = (red: number, green: number, blue: number, alpha = 255) => ({
 
 describe('FilterRegistry', () => {
   it('registers all supported adjustment kinds with normalized serializable parameters', () => {
-    expect(filterRegistry.list().map((definition) => definition.kind)).toEqual([
+    expect(filterRegistry.list().map((definition) => definition.kind)).toEqual(expect.arrayContaining([
       'brightness-contrast', 'exposure', 'saturation', 'hue', 'temperature',
       'grayscale', 'sepia', 'invert', 'gaussian-blur', 'sharpen', 'levels',
-    ])
+    ]))
     expect(filterRegistry.create('brightness-contrast', { brightness: 9, contrast: -9 }).parameters)
       .toEqual({ brightness: 1, contrast: -1 })
     expect(filterRegistry.create('levels', { inputBlack: 250, inputWhite: 20, gamma: 99 }).parameters)

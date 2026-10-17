@@ -14,6 +14,8 @@ export class AdjustmentManager {
 
   replace(layerId: string, adjustments: readonly LayerAdjustment[]): void {
     const layer = this.requireLayer(layerId)
+    if (layer.locked) throw new Error('Unlock the layer before editing effects')
+    if (adjustments.length > 64) throw new Error('A layer can contain at most 64 effects')
     const ids = new Set<string>()
     layer.adjustments = adjustments.map((adjustment) => {
       const normalized = this.registry.normalize(cloneAdjustment(adjustment))

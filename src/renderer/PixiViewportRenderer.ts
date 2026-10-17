@@ -1,3 +1,4 @@
+import { EffectPreviewCache } from './EffectPreviewCache'
 import { layerWorldMatrix } from '../core/geometry/LayerCoordinates'
 import { booleanGroupResult } from '../core/vector/BooleanGroup'
 import { Application, Container, Graphics, Matrix, Rectangle, Texture, TilingSprite, type Filter } from 'pixi.js'
@@ -35,6 +36,7 @@ export class PixiViewportRenderer {
   private readonly sourceRegistry: RasterSourceRegistry
   private readonly onViewChange: ((state: ViewState) => void) | undefined
   private readonly onError: ((message: string) => void) | undefined
+  private readonly effects: EffectPreviewCache
   private readonly textures: RasterTextureCache
   private readonly layerDisplays = new Map<string, Container>()
   private readonly layerFilters = new Map<string, Filter[]>()
@@ -71,6 +73,7 @@ export class PixiViewportRenderer {
     this.textures = new RasterTextureCache(this.sourceRegistry)
     this.onViewChange = options.onViewChange
     this.onError = options.onError
+    this.effects = new EffectPreviewCache(this.sourceRegistry, () => { if (this.initialized) this.renderDocument() }, message => this.onError?.(message), busy => { if (this.initialized) this.app.canvas.setAttribute('aria-busy', String(busy)) })
   }
 
   async initialize(host: HTMLElement): Promise<void> {
@@ -111,6 +114,7 @@ export class PixiViewportRenderer {
   }
 
   setDocument(editorDocument: EditorDocument | null): void {
+    if (this.editorDocument?.id !== editorDocument?.id) this.effects.invalidate()
     this.editorDocument = editorDocument
     this.viewport.setDocument(editorDocument?.dimensions ?? null)
     if (this.initialized) this.renderDocument()
@@ -204,7 +208,7 @@ export class PixiViewportRenderer {
   }
 
   updateRasterSource(sourceId: string): void {
-    if (this.editorDocument && flattenLayers(this.editorDocument.layers).some((layer) => layer.kind === 'raster' && layer.mask?.enabled && (layer.pixelSourceId === sourceId || layer.mask.pixelSourceId === sourceId))) {
+    if (this.editorDocument && flattenLayers(this.editorDocument.layers).some((layer) => layer.kind === 'group' && layer.adjustments.some(a => a.enabled) || layer.kind === 'raster' && (layer.mask?.enabled || layer.adjustments.some(a => a.enabled)) && (layer.pixelSourceId === sourceId || layer.mask?.pixelSourceId === sourceId))) {
       this.renderDocument()
       return
     }
@@ -250,7 +254,7 @@ export class PixiViewportRenderer {
   private displaySignature(layer: Layer): string {
     if (layer.kind === 'vector') return `${JSON.stringify([layer.geometry, layer.style, layer.visible])}:${layer.style.scaleStroke === false ? this.vectorStrokeScale(layer) : ''}`
     if (layer.kind === 'group' && layer.booleanOperation) return JSON.stringify([layer.booleanOperation, layer.children, layer.visible, this.vectorStrokeScale(layer)])
-    if (layer.kind === 'group') return `group:${layer.visible}`
+    if (layer.kind === 'group') return `group:${layer.visible}:${JSON.stringify(layer.adjustments)}`
     return visibilitySignature([layer])
   }
 
@@ -310,6 +314,7 @@ export class PixiViewportRenderer {
     this.app.canvas.removeEventListener('webglcontextrestored', this.onContextRestored)
     document.removeEventListener('visibilitychange', this.onVisibilityChange)
     document.fonts?.removeEventListener('loadingdone', this.onFontsLoaded)
+    this.effects.destroy()
     this.destroyLayerResources()
     this.layerDisplays.clear()
     this.documentRoot.removeChildren().forEach(destroyDisplay)
@@ -390,7 +395,11 @@ export class PixiViewportRenderer {
   private createLayerDisplay(layer: Layer, ancestors: readonly string[] = [], parentVisible = true): Container | null {
     const effectiveVisible = parentVisible && layer.visible
     let display: Container
-    if (layer.kind === 'group' && layer.booleanOperation) {
+    const hasEffects = (layer.kind === 'raster' || layer.kind === 'group' && !layer.booleanOperation) && layer.adjustments.some(a => a.enabled)
+    const effectSource = hasEffects && effectiveVisible && this.editorDocument ? this.effects.get(layer, this.editorDocument.dimensions.width, this.editorDocument.dimensions.height) : null
+    if (effectSource) {
+      display = this.textures.createDisplay(effectSource) ?? new Container()
+    } else if (layer.kind === 'group' && layer.booleanOperation) {
       try { display = createVectorGraphics(booleanGroupResult(layer), this.vectorStrokeScale(layer)) } catch { display = new Container(); this.onError?.(`Could not resolve boolean group “${layer.name}”.`) }
     } else if (layer.kind === 'group') {
       display = new Container()
@@ -443,6 +452,7 @@ export class PixiViewportRenderer {
     display.blendMode = layer.blendMode
     display.visible = layer.visible
     this.syncFilters(display, layer)
+    if (hasEffects && layer.kind === 'group') for (const child of flattenLayers(layer.children)) this.layerDisplays.delete(child.id)
     this.layerDisplays.set(layer.id, display)
     return display
   }
@@ -479,7 +489,7 @@ export class PixiViewportRenderer {
       display.blendMode = layer.blendMode
       display.visible = layer.visible
       this.syncFilters(display, layer)
-      if (layer.kind === 'group' && !layer.booleanOperation) this.syncLayerDisplays(display, layer.children)
+      if (layer.kind === 'group' && !layer.booleanOperation && !layer.adjustments.some(a => a.enabled)) this.syncLayerDisplays(display, layer.children)
     }
   }
 
@@ -513,7 +523,7 @@ export class PixiViewportRenderer {
     const signature = JSON.stringify(layer.adjustments)
     if (this.filterSignatures.get(layer.id) === signature) return
     this.layerFilters.get(layer.id)?.forEach((filter) => filter.destroy())
-    const filters = layer.adjustments.filter((adjustment) => adjustment.enabled).map(createPixiFilter)
+    const filters = layer.kind === 'raster' || layer.kind === 'group' ? [] : layer.adjustments.filter((adjustment) => adjustment.enabled).map(createPixiFilter)
     display.filters = filters
     this.layerFilters.set(layer.id, filters)
     this.filterSignatures.set(layer.id, signature)
@@ -670,10 +680,10 @@ function findLayerPath(layers: readonly Layer[], id: string): string[] | null {
 
 function visibilitySignature(layers: readonly Layer[]): string {
   return layers.map((layer) => layer.kind === 'group'
-    ? `${layer.id}:${layer.visible}:${layer.booleanOperation || hasNonScalingStroke(layer.children) ? JSON.stringify(layer) : ''}:group[${visibilitySignature(layer.children)}]`
+    ? `${layer.id}:${JSON.stringify(layer.adjustments)}:${layer.visible}:${layer.booleanOperation || layer.adjustments.some(a => a.enabled) || hasNonScalingStroke(layer.children) ? JSON.stringify(layer) : ''}:group[${visibilitySignature(layer.children)}]`
     : layer.kind === 'vector' ? `${layer.id}:${layer.visible}:${JSON.stringify(layer.geometry)}:${JSON.stringify(layer.style)}:${layer.style.scaleStroke === false ? JSON.stringify([layer.transform, layer.svgMatrix]) : ''}`
       : layer.kind === 'text' ? `${layer.id}:${layer.visible}:${layer.text}:${layer.fontFamily}:${layer.fontSize}:${layer.fontWeight}:${layer.fontStyle}:${layer.alignment}:${layer.color}:${layer.lineSpacing}:${JSON.stringify(layer.textBox)}`
-      : `${layer.id}:${layer.visible}:${layer.pixelSourceId ?? ''}:${layer.mask?.pixelSourceId ?? ''}:${layer.mask?.enabled ?? false}:${layer.mask?.inverted ?? false}:${layer.mask?.pixelSourceId ? rasterSources.get(layer.mask.pixelSourceId)?.revision ?? -1 : -1}`).join('|')
+      : `${layer.id}:${JSON.stringify(layer.adjustments)}:${layer.visible}:${layer.pixelSourceId ?? ''}:${layer.mask?.pixelSourceId ?? ''}:${layer.mask?.enabled ?? false}:${layer.mask?.inverted ?? false}:${layer.mask?.pixelSourceId ? rasterSources.get(layer.mask.pixelSourceId)?.revision ?? -1 : -1}`).join('|')
 }
 
 function groupSignature(layer: Layer, sources: RasterSourceRegistry): string {
@@ -701,4 +711,4 @@ function destroyDisplay(display: Container): void {
 function hasNonScalingStroke(layers: readonly Layer[]): boolean { return layers.some(layer => layer.kind === 'vector' ? layer.style.scaleStroke === false : layer.kind === 'group' && hasNonScalingStroke(layer.children)) }
 
 /** Live boolean operands are model layers, not separately painted displays. */
-function displayedLayers(layers: readonly Layer[]): Layer[] { return layers.flatMap(layer => layer.kind === 'group' && !layer.booleanOperation ? [layer, ...displayedLayers(layer.children)] : [layer]) }
+function displayedLayers(layers: readonly Layer[]): Layer[] { return layers.flatMap(layer => layer.kind === 'group' && !layer.booleanOperation && !layer.adjustments.some(a => a.enabled) ? [layer, ...displayedLayers(layer.children)] : [layer]) }

@@ -46,14 +46,18 @@ export class PsdAdapter {
     validateRasterBudget(document.dimensions.width, document.dimensions.height, 'Document')
     const warnings: string[] = []
     const imageExporter = new ImageExportAdapter(this.sources)
-    const composite = (await imageExporter.renderDocument(document)).readPixels()
-    imageExporter.destroy()
-    await loadLayerFonts(document.layers)
-    const psd: Psd = {
-      width: document.dimensions.width, height: document.dimensions.height,
-      imageData: toPixelData(composite),
-      children: exportLayers(document.layers, document.dimensions.width, document.dimensions.height, this.sources, warnings),
-    }
+    const temporary: string[] = []
+    let psd: Psd
+    try {
+      const composite = (await imageExporter.renderDocument(document)).readPixels()
+      await loadLayerFonts(document.layers)
+      const layers = await bakeEffectGroups(document.layers, document.dimensions.width, document.dimensions.height, imageExporter, this.sources, temporary, warnings)
+      psd = {
+        width: document.dimensions.width, height: document.dimensions.height,
+        imageData: toPixelData(composite),
+        children: exportLayers(layers, document.dimensions.width, document.dimensions.height, this.sources, warnings),
+      }
+    } finally { imageExporter.destroy(); temporary.forEach(id => this.sources.remove(id)) }
     let bytes: Uint8Array
     try { bytes = writePsdUint8Array(psd, { generateThumbnail: false, invalidateTextLayers: false, logMissingFeatures: false }) }
     catch (error) { throw new Error(`PSD export failed: ${errorMessage(error)}`, { cause: error }) }
@@ -237,3 +241,18 @@ function importBlend(mode: PsdLayer['blendMode'], warnings: string[]): BlendMode
 function isIdentity(transform: Layer['transform']): boolean { return transform.x === 0 && transform.y === 0 && transform.scaleX === 1 && transform.scaleY === 1 && transform.rotation === 0 }
 function unique(values: string[]): string[] { return [...new Set(values)] }
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : 'Unknown error' }
+
+/** PSD cannot encode Photolisa effect stacks; bake effected groups instead of dropping them. */
+async function bakeEffectGroups(layers: readonly Layer[], width: number, height: number, exporter: ImageExportAdapter, sources: RasterSourceRegistry, temporary: string[], warnings: string[]): Promise<Layer[]> {
+  const result: Layer[] = []
+  for (const layer of layers) {
+    if (layer.kind === 'group' && layer.adjustments.some(effect => effect.enabled)) {
+      const canvas = await exporter.renderEffectLayer(layer, width, height), id = sources.registerCanvas(canvas)
+      temporary.push(id)
+      result.push({ ...createLayerBase(layer.id, 'raster', layer.name), kind: 'raster', visible: layer.visible, locked: layer.locked, opacity: layer.opacity, blendMode: layer.blendMode, transform: { ...layer.transform }, ...(layer.svgMatrix ? { svgMatrix: [...layer.svgMatrix] } : {}), pixelSourceId: id })
+      warnings.push(`Effects on group “${layer.name}” were baked into a raster layer for PSD; save a Photolisa project to keep the stack editable.`)
+    } else if (layer.kind === 'group') result.push({ ...layer, children: await bakeEffectGroups(layer.children, width, height, exporter, sources, temporary, warnings) })
+    else result.push(layer)
+  }
+  return result
+}

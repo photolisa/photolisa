@@ -51,8 +51,14 @@ export function useDocumentTabs(options: {
     syncActiveTool()
   }
 
+  function home(): void {
+    prepare()
+    options.manager.showHome()
+    syncActiveTool()
+  }
+
   function cycle(direction: 1 | -1): void {
-    if (options.manager.count < 2) return
+    if (!options.manager.count) return
     prepare()
     options.manager.cycle(direction)
     syncActiveTool()
@@ -106,7 +112,7 @@ export function useDocumentTabs(options: {
   }
 
   return {
-    autosaves, pendingCloseId, pendingCloseName, viewState, activate, cycle, prepareOpen,
+    autosaves, pendingCloseId, pendingCloseName, viewState, activate, home, cycle, prepareOpen,
     rename, requestClose, finishClose, saveAndClose, closeWithoutSaving, reopen, onViewChange,
   }
 }

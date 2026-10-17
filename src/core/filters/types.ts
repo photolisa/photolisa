@@ -1,4 +1,5 @@
-export type AdjustmentKind =
+import type { ExtendedEffectKind, ExtendedParameters } from './EffectCatalog'
+export type AdjustmentKind = ExtendedEffectKind
   | 'brightness-contrast'
   | 'exposure'
   | 'saturation'
@@ -29,7 +30,7 @@ export interface LevelsParameters {
   outputWhite: number
 }
 
-export interface AdjustmentParametersByKind {
+export interface AdjustmentParametersByKind extends ExtendedParameters {
   'brightness-contrast': BrightnessContrastParameters
   exposure: ExposureParameters
   saturation: SaturationParameters
@@ -48,6 +49,10 @@ export type LayerAdjustment<K extends AdjustmentKind = AdjustmentKind> = K exten
   kind: K
   enabled: boolean
   parameters: AdjustmentParametersByKind[K]
+  opacity?: number
+  blendMode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'soft-light'
+  selection?: EffectSelection
+  lut?: ColorLookupTable
 } : never
 
 export interface PixelBuffer { data: Uint8ClampedArray<ArrayBuffer>; width: number; height: number }
@@ -59,3 +64,6 @@ export interface FilterDefinition<K extends AdjustmentKind = AdjustmentKind> {
   normalize(parameters: Partial<AdjustmentParametersByKind[K]>): AdjustmentParametersByKind[K]
   apply(input: PixelBuffer, parameters: AdjustmentParametersByKind[K]): PixelBuffer
 }
+
+export interface EffectSelection { x: number; y: number; width: number; height: number; runs: readonly number[] }
+export interface ColorLookupTable { size: number; data: readonly number[] }

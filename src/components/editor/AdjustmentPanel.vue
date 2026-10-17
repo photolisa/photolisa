@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { effectControls } from '~/ui/effectSchemas'
 import { shallowRef, ref, computed, onUnmounted, watch } from 'vue'
 import { useDialogFocus } from '../../composables/useDialogFocus'
 import EditorIcon from './Icon.vue'
@@ -25,7 +26,7 @@ const adjustments = computed(() => {
 })
 const activeAdjustment = computed(() => adjustments.value.find((adjustment) => adjustment.id === editingId.value) ?? null)
 const activeDefinition = computed(() => activeAdjustment.value ? filterRegistry.get(activeAdjustment.value.kind) : null)
-const controls = computed(() => activeAdjustment.value ? CONTROL_SCHEMAS[activeAdjustment.value.kind] : [])
+const controls = computed(() => activeAdjustment.value ? effectControls(activeAdjustment.value.kind) : [])
 
 function add(): void {
   closePreview(true)
@@ -96,30 +97,6 @@ function move(adjustment: LayerAdjustment, delta: number): void {
 watch(() => props.layer.id, () => closePreview(true))
 onUnmounted(() => closePreview(true))
 
-interface ControlSchema { key: string; label: string; min: number; max: number; step: number; suffix?: string }
-const CONTROL_SCHEMAS: Record<AdjustmentKind, ControlSchema[]> = {
-  'brightness-contrast': [
-    { key: 'brightness', label: 'Brightness', min: -1, max: 1, step: 0.01 },
-    { key: 'contrast', label: 'Contrast', min: -1, max: 1, step: 0.01 },
-  ],
-  exposure: [{ key: 'stops', label: 'Exposure', min: -5, max: 5, step: 0.05, suffix: ' EV' }],
-  saturation: [{ key: 'amount', label: 'Saturation', min: -1, max: 1, step: 0.01 }],
-  hue: [{ key: 'degrees', label: 'Hue', min: -180, max: 180, step: 1, suffix: '°' }],
-  temperature: [{ key: 'amount', label: 'Temperature', min: -1, max: 1, step: 0.01 }],
-  grayscale: [{ key: 'amount', label: 'Amount', min: 0, max: 1, step: 0.01 }],
-  sepia: [{ key: 'amount', label: 'Amount', min: 0, max: 1, step: 0.01 }],
-  invert: [{ key: 'amount', label: 'Amount', min: 0, max: 1, step: 0.01 }],
-  'gaussian-blur': [{ key: 'radius', label: 'Radius', min: 0, max: 50, step: 0.5, suffix: ' px' }],
-  sharpen: [{ key: 'amount', label: 'Amount', min: 0, max: 2, step: 0.01 }],
-  levels: [
-    { key: 'inputBlack', label: 'Input black', min: 0, max: 254, step: 1 },
-    { key: 'inputWhite', label: 'Input white', min: 1, max: 255, step: 1 },
-    { key: 'gamma', label: 'Gamma', min: 0.1, max: 10, step: 0.05 },
-    { key: 'outputBlack', label: 'Output black', min: 0, max: 255, step: 1 },
-    { key: 'outputWhite', label: 'Output white', min: 0, max: 255, step: 1 },
-  ],
-}
-
 function parameterValue(adjustment: LayerAdjustment, key: string): number {
   return Number((adjustment.parameters as unknown as Record<string, number>)[key] ?? 0)
 }
@@ -166,7 +143,7 @@ function parameterValue(adjustment: LayerAdjustment, key: string): number {
         <label v-for="control in controls" :key="control.key" class="grid grid-cols-[80px_minmax(0,1fr)_48px] items-center gap-3 text-xs text-ui-secondary-text">
           <span>{{ control.label }}</span>
           <input class="min-w-0 w-full accent-accent" type="range" :min="control.min" :max="control.max" :step="control.step" :value="parameterValue(activeAdjustment, control.key)" @input="updateParameter(control.key, $event)">
-          <span class="text-right text-ui-text">{{ parameterValue(activeAdjustment, control.key) }}{{ control.suffix }}</span>
+          <span class="text-right text-ui-text">{{ parameterValue(activeAdjustment, control.key) }}</span>
         </label>
       </div>
       <footer class="flex justify-between border-t border-ui-border px-4 py-3">

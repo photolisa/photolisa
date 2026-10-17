@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import EditorIcon from './Icon.vue'
+import HelpDialog from './HelpDialog.vue'
+import { EFFECT_CATEGORIES } from '~/core/filters/EffectCatalog'
 const props = defineProps<{
   mode: 'simple' | 'pro'
   panelsVisible: boolean
@@ -42,9 +44,11 @@ const emit = defineEmits<{
   fit: []
   actualSize: []
   resetView: []
+  effects: [category: string]
 }>()
 
-type MenuId = 'file' | 'edit' | 'image' | 'layer' | 'view'
+type MenuId = 'file' | 'edit' | 'image' | 'layer' | 'view' | 'help' | 'effects'
+const helpDialog = ref<'about' | 'shortcuts' | null>(null)
 const openMenu = ref<MenuId | null>(null)
 const root = ref<HTMLElement | null>(null)
 
@@ -53,7 +57,9 @@ const menus: { id: MenuId; label: string }[] = [
   { id: 'edit', label: 'Edit' },
   { id: 'image', label: 'Image' },
   { id: 'layer', label: 'Layer' },
+  { id: 'effects', label: 'Effects' },
   { id: 'view', label: 'View' },
+  { id: 'help', label: 'Help' },
 ]
 
 function toggle(menu: MenuId): void {
@@ -84,6 +90,7 @@ onUnmounted(() => window.removeEventListener('pointerdown', onOutside))
           class="group menu-trigger text-sm h-full flex items-center"
           :class="{ 'active': openMenu === menu.id }"
           :aria-expanded="openMenu === menu.id"
+          :data-help-trigger="menu.id === 'help' ? '' : undefined"
           @click="toggle(menu.id)"
           @keydown.escape.stop="openMenu = null"
           @keydown.down.prevent="openMenu = menu.id"
@@ -146,6 +153,16 @@ onUnmounted(() => window.removeEventListener('pointerdown', onOutside))
             <button class="menu-item" @click="run(() => emit('actualSize'))">Actual size</button>
             <button class="menu-item" @click="run(() => emit('resetView'))">Reset view</button>
           </template>
+          <template v-else-if="menu.id === 'effects'">
+            <button class="menu-item" @click="run(() => emit('effects', 'All'))">Browse effects…<kbd>Ctrl+Shift+F</kbd></button>
+            <div class="my-1 border-t border-ui-border" />
+            <button v-for="category in EFFECT_CATEGORIES" :key="category" class="menu-item" :disabled="!canExport" @click="run(() => emit('effects', category))">{{ category }}</button>
+          </template>
+          <template v-else-if="menu.id === 'help'">
+            <button class="menu-item" @click="run(() => helpDialog = 'about')">About</button>
+            <a class="menu-item" href="https://github.com/photolisa/photolisa" target="_blank" rel="noopener noreferrer" @click="openMenu = null">GitHub</a>
+            <button class="menu-item" @click="run(() => helpDialog = 'shortcuts')">Keyboard Shortcuts</button>
+          </template>
           <p v-else class="px-3 py-2 text-xs text-ui-secondary-text">No actions available yet</p>
         </div>
       </div>
@@ -170,6 +187,7 @@ onUnmounted(() => window.removeEventListener('pointerdown', onOutside))
       </button>
     </div>
   </header>
+  <HelpDialog v-if="helpDialog" :section="helpDialog" @close="helpDialog = null; root?.querySelector<HTMLButtonElement>('[data-help-trigger]')?.focus()" />
 </template>
 
 <style scoped>
@@ -205,6 +223,8 @@ onUnmounted(() => window.removeEventListener('pointerdown', onOutside))
 }
 
 @media (max-width: 1100px) {
+  .editor-brand { display: none; }
+  .menu-trigger > span { padding-inline: 8px; }
   .document-title {
     display: none;
   }
@@ -231,9 +251,9 @@ onUnmounted(() => window.removeEventListener('pointerdown', onOutside))
     display: none;
   }
 
-  .menu-trigger {
-    padding: 0 8px;
-  }
+  .menu-trigger { padding: 0; }
+  .menu-trigger > span { padding-inline: 6px; }
+
 
   .history-actions {
     display: none;
@@ -253,9 +273,10 @@ onUnmounted(() => window.removeEventListener('pointerdown', onOutside))
     display: none;
   }
 
-  .menu-trigger {
-    padding: 0 6px;
-  }
+  .app-header { padding-inline: 4px; }
+  .app-header > nav { gap: 0; }
+  .menu-trigger { padding: 0; font-size: 10px; }
+  .menu-trigger > span { padding-inline: 2px; }
 
   .header-actions {
     gap: 2px;

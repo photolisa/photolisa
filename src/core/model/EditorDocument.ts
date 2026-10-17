@@ -7,6 +7,7 @@ import type {
   SerializedEditorDocument,
   DocumentMetadata,
 } from './types'
+import type { LayerAdjustment } from '../filters/types'
 import { createLayerBase } from './types'
 import { cloneAdjustment, filterRegistry } from '../filters/FilterRegistry'
 import { validateVectorGeometry, validateVectorStyle } from './VectorGeometry'
@@ -22,6 +23,7 @@ export class EditorDocument {
   selectedLayerIds: string[]
   activeLayerId: string | null
   revision: number
+  readonly previewOriginals = new Map<string, readonly LayerAdjustment[]>()
   readonly metadata: DocumentMetadata
 
   private constructor(
@@ -80,7 +82,7 @@ export class EditorDocument {
       name: this.name,
       dimensions: { ...this.dimensions },
       background: this.background,
-      layers: cloneLayerTree(this.layers),
+      layers: committedLayers(this.layers, this.previewOriginals),
       selectedLayerIds: [...this.selectedLayerIds],
       activeLayerId: this.activeLayerId,
       revision: this.revision,
@@ -93,6 +95,7 @@ export class EditorDocument {
 
 export function cloneLayerTree(layers: readonly Layer[]): Layer[] {
   return layers.map((layer): Layer => {
+    if ((layer.adjustments?.length ?? 0) > 64) throw new Error('A layer can contain at most 64 effects')
     const adjustments = (layer.adjustments ?? []).map((adjustment) => filterRegistry.normalize(cloneAdjustment(adjustment)))
     const base = { ...layer, transform: { ...layer.transform }, ...(layer.svgMatrix ? { svgMatrix: [...layer.svgMatrix] as typeof layer.svgMatrix } : {}), adjustments, mask: layer.mask ? { ...layer.mask } : null }
     if (layer.kind === 'group') return { ...base, kind: 'group', children: cloneLayerTree(layer.children) }
@@ -144,4 +147,13 @@ function validateOptions(options: NewDocumentOptions): void {
   if (!Number.isInteger(options.width) || options.width < 1 || options.width > 16_384) throw new Error('Width must be an integer between 1 and 16,384 pixels')
   if (!Number.isInteger(options.height) || options.height < 1 || options.height > 16_384) throw new Error('Height must be an integer between 1 and 16,384 pixels')
   if (!Number.isFinite(options.resolution) || options.resolution < 1 || options.resolution > 2_400) throw new Error('Resolution must be between 1 and 2,400 PPI')
+}
+
+function committedLayers(layers: readonly Layer[], originals: ReadonlyMap<string, readonly LayerAdjustment[]>): Layer[] {
+  return cloneLayerTree(layers).map(layer => {
+    const original = originals.get(layer.id)
+    if (original) layer.adjustments = original.map(cloneAdjustment)
+    if (layer.kind === 'group') layer.children = committedLayers(layer.children, originals)
+    return layer
+  })
 }

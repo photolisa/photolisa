@@ -1,3 +1,6 @@
+import { convolve } from './EffectPixels'
+import { extendedFilters } from './ExtendedFilters'
+import { applyLut, compositeEffect, defaultLut, EFFECT_BLEND_MODES, normalizeLut, normalizeSelection } from './EffectPipeline'
 import type {
   AdjustmentKind,
   AdjustmentParametersByKind,
@@ -160,7 +163,7 @@ export class GaussianBlurFilter implements FilterDefinition<'gaussian-blur'> {
     const radius = Math.ceil(parameters.radius)
     if (radius === 0) return cloneBuffer(input)
     const kernel = gaussianKernel(radius)
-    return convolveSeparable(input, kernel)
+    return convolve(input, kernel)
   }
 }
 
@@ -210,7 +213,7 @@ export class FilterRegistry {
   }
 
   create<K extends AdjustmentKind>(kind: K, parameters: Partial<AdjustmentParametersByKind[K]> = {}): LayerAdjustment<K> {
-    return { id: entityId(), kind, enabled: true, parameters: this.get(kind).normalize(parameters) } as LayerAdjustment<K>
+    return { id: entityId(), kind, enabled: true, parameters: this.get(kind).normalize(parameters), ...(kind === 'color-lookup' ? { lut: defaultLut() } : {}) } as LayerAdjustment<K>
   }
 
   normalize(adjustment: LayerAdjustment): LayerAdjustment {
@@ -220,13 +223,24 @@ export class FilterRegistry {
       kind: adjustment.kind,
       enabled: adjustment.enabled !== false,
       parameters: definition.normalize(adjustment.parameters),
+      ...(adjustment.opacity !== undefined ? { opacity: clamp(adjustment.opacity, 0, 1) } : {}),
+      ...(adjustment.blendMode !== undefined ? { blendMode: EFFECT_BLEND_MODES.includes(adjustment.blendMode) ? adjustment.blendMode : 'normal' } : {}),
+      ...(adjustment.selection ? { selection: normalizeSelection(adjustment.selection) } : {}),
+      ...(adjustment.kind === 'color-lookup' ? { lut: normalizeLut(adjustment.lut ?? defaultLut()) } : {}),
     } as LayerAdjustment
   }
 
-  apply(input: PixelBuffer, adjustments: readonly LayerAdjustment[]): PixelBuffer {
-    return adjustments.reduce((pixels, adjustment) => adjustment.enabled
-      ? this.get(adjustment.kind).apply(pixels, adjustment.parameters as never)
-      : pixels, cloneBuffer(input))
+  apply(input: PixelBuffer, adjustments: readonly LayerAdjustment[], accelerated?: (pixels: PixelBuffer, effect: LayerAdjustment) => PixelBuffer | null): PixelBuffer {
+    if (!Number.isSafeInteger(input.width) || !Number.isSafeInteger(input.height) || input.width < 1 || input.height < 1 || input.width * input.height > 67_108_864 || input.data.length !== input.width * input.height * 4) throw new Error('Invalid or oversized effect pixel buffer')
+    let pixels = input
+    for (const adjustment of adjustments) {
+      if (!adjustment.enabled || adjustment.opacity === 0) continue
+      const processed = adjustment.kind === 'color-lookup'
+        ? applyLut(pixels, adjustment.lut ?? defaultLut(), adjustment.parameters.amount ?? 1)
+        : accelerated?.(pixels, adjustment) ?? this.get(adjustment.kind).apply(pixels, adjustment.parameters as never)
+      pixels = compositeEffect(pixels, processed, adjustment)
+    }
+    return pixels === input ? cloneBuffer(input) : pixels
   }
 }
 
@@ -234,12 +248,16 @@ const DEFAULT_FILTERS: readonly FilterDefinition[] = [
   new BrightnessContrastFilter(), new ExposureFilter(), new SaturationFilter(), new HueFilter(),
   new TemperatureFilter(), new GrayscaleFilter(), new SepiaFilter(), new InvertFilter(), new GaussianBlurFilter(),
   new SharpenFilter(), new LevelsFilter(),
+  ...extendedFilters((input, radius) => new GaussianBlurFilter().apply(input, { radius })),
 ]
 
 export const filterRegistry = new FilterRegistry()
 
 export function cloneAdjustment(adjustment: LayerAdjustment): LayerAdjustment {
-  return { ...adjustment, parameters: { ...adjustment.parameters } } as LayerAdjustment
+  return { ...adjustment, parameters: { ...adjustment.parameters },
+    ...(adjustment.selection ? { selection: { ...adjustment.selection, runs: [...adjustment.selection.runs] } } : {}),
+    ...(adjustment.lut ? { lut: { ...adjustment.lut, data: [...adjustment.lut.data] } } : {}),
+  } as LayerAdjustment
 }
 
 function gaussianKernel(radius: number): Float32Array {
@@ -253,37 +271,6 @@ function gaussianKernel(radius: number): Float32Array {
   }
   for (let index = 0; index < kernel.length; index += 1) kernel[index] = (kernel[index] ?? 0) / sum
   return kernel
-}
-
-function convolveSeparable(input: PixelBuffer, kernel: Float32Array): PixelBuffer {
-  const radius = Math.floor(kernel.length / 2)
-  const horizontal = new Float32Array(input.data.length)
-  const output = new Uint8ClampedArray(input.data.length)
-  for (let y = 0; y < input.height; y += 1) for (let x = 0; x < input.width; x += 1) for (let channel = 0; channel < 4; channel += 1) {
-    let value = 0
-    for (let offset = -radius; offset <= radius; offset += 1) {
-      const sampleValue = channel === 3 ? sample(input, x + offset, y, channel) : premultipliedSample(input, x + offset, y, channel)
-      value += sampleValue * (kernel[offset + radius] ?? 0)
-    }
-    horizontal[(y * input.width + x) * 4 + channel] = value
-  }
-  for (let y = 0; y < input.height; y += 1) for (let x = 0; x < input.width; x += 1) for (let channel = 0; channel < 4; channel += 1) {
-    let value = 0
-    for (let offset = -radius; offset <= radius; offset += 1) {
-      const sourceY = Math.max(0, Math.min(input.height - 1, y + offset))
-      value += (horizontal[(sourceY * input.width + x) * 4 + channel] ?? 0) * (kernel[offset + radius] ?? 0)
-    }
-    if (channel === 3) output[(y * input.width + x) * 4 + channel] = byte(value)
-    else {
-      let alpha = 0
-      for (let offset = -radius; offset <= radius; offset += 1) {
-        const sourceY = Math.max(0, Math.min(input.height - 1, y + offset))
-        alpha += (horizontal[(sourceY * input.width + x) * 4 + 3] ?? 0) * (kernel[offset + radius] ?? 0)
-      }
-      output[(y * input.width + x) * 4 + channel] = alpha > 0 ? byte(value * 255 / alpha) : 0
-    }
-  }
-  return { data: output, width: input.width, height: input.height }
 }
 
 function sample(input: PixelBuffer, x: number, y: number, channel: number): number {

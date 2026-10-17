@@ -1,4 +1,15 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
+import { useEventListener } from '@vueuse/core'
+import EffectsPanel from '../components/effects/EffectsPanel.vue'
+import { editorCore } from '../composables/useEditor'
+const effectsCategory = ref<string | null>(null)
+useEventListener(window, 'keydown', (event: KeyboardEvent) => {
+  if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'f' && !(event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]'))) {
+    event.preventDefault(); effectsCategory.value = 'All'
+  }
+})
+
 import PdfImportDialog from '../components/editor/PdfImportDialog.vue'
 import PdfExportDialog from '../components/editor/PdfExportDialog.vue'
 import EditorAppMenuBar from '../components/editor/AppMenuBar.vue'
@@ -31,6 +42,12 @@ const {
   requestExportImage, exportImage, saveProject, exportPsd, exportSvg, recoverAutosave,
   onFileSelected, onViewChange, transferLayers, onTransferDrop, undo, redo,
 } = useEditorWorkspace()
+const effectLayer = computed(() => {
+  void currentDocument.value?.revision
+  const id = currentDocument.value?.activeLayerId
+  const layer = id ? editorCore.layers.find(id) : null
+  return layer && !layer.locked && (layer.kind === 'raster' || layer.kind === 'group' && !layer.booleanOperation) ? layer : null
+})
 </script>
 
 <template>
@@ -44,6 +61,7 @@ const {
       :can-export="Boolean(currentDocument)"
       :can-reopen="canReopen"
       :is-dirty="isDirty"
+      @effects="effectsCategory = $event"
       @mode="layout.mode.value = $event"
       @toggle-panels="layout.togglePanels"
       @new-document="openNewDocument"
@@ -79,6 +97,7 @@ const {
       :tabs="tabs"
       :can-reopen="canReopen"
       @activate="tabControls.activate"
+      @home="tabControls.home"
       @close="tabControls.requestClose"
       @rename="tabControls.rename"
       @reorder="(sourceId, targetId, after) => manager.reorder(sourceId, targetId, after)"
@@ -121,6 +140,7 @@ const {
       <span>{{ importError }}</span>
       <button class="grid h-5 w-5 place-items-center text-ui-secondary-text hover:text-ui-text" aria-label="Dismiss error" title="Dismiss error" @click="clearImportError"><EditorIcon name="x" :size="14" /></button>
     </div>
+    <EffectsPanel v-if="effectsCategory !== null" :key="currentDocument?.id ?? 'empty-effects'" :layer="effectLayer" :category="effectsCategory" @close="effectsCategory = null" />
     <PdfImportDialog v-if="pdf.pending.value" :name="pdf.name.value" :pages="pdf.pages.value" :busy="pdf.busy.value" :progress="pdf.progress.value" :password-needed="pdf.passwordNeeded.value" :password-incorrect="pdf.passwordIncorrect.value" :can-import-layers="Boolean(currentDocument)" @close="pdf.closeImport" @unlock="pdf.unlock" @import="pdf.importPages" />
     <PdfExportDialog v-if="pdf.showExport.value" :tabs="tabs" :selected="pdf.exportSelection.value" :busy="pdf.busy.value" :progress="pdf.progress.value" :previews="pdf.previews.value" :warnings="pdf.exportWarnings.value" @close="pdf.cancelExport" @export="pdf.exportPdf" @invalidate="pdf.clearPreviews" @inspect="pdf.inspectExport" />
     <EditorNewDocumentDialog v-if="showNewDialog" @close="showNewDialog = false" @create="create" />

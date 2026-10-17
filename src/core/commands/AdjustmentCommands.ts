@@ -4,13 +4,15 @@ import { cloneAdjustment } from '../filters/FilterRegistry'
 import type { LayerAdjustment } from '../filters/types'
 
 export class SetLayerAdjustmentsCommand implements Command {
-  readonly label = 'Edit Layer Adjustments'
+  readonly label = 'Edit Layer Effects'
+  readonly memoryCost: number
   private readonly before: LayerAdjustment[]
   private readonly after: LayerAdjustment[]
 
   constructor(private readonly layerId: string, before: readonly LayerAdjustment[], after: readonly LayerAdjustment[]) {
     this.before = before.map(cloneAdjustment)
     this.after = after.map(cloneAdjustment)
+    this.memoryCost = JSON.stringify([this.before, this.after]).length * 2
   }
 
   execute(editor: EditorCore): void { editor.adjustments.replace(this.layerId, this.after) }
@@ -23,6 +25,8 @@ export class AdjustmentPreviewSession {
 
   constructor(private readonly editor: EditorCore, readonly layerId: string) {
     this.before = editor.adjustments.snapshot(layerId)
+    if (editor.document?.previewOriginals.size) throw new Error('Finish the current effect preview first')
+    editor.document?.previewOriginals.set(layerId, this.before)
   }
 
   get adjustments(): readonly LayerAdjustment[] { return this.editor.adjustments.list(this.layerId) }
@@ -31,6 +35,7 @@ export class AdjustmentPreviewSession {
     this.ensureOpen()
     this.closed = true
     const after = this.editor.adjustments.snapshot(this.layerId)
+    this.editor.document?.previewOriginals.delete(this.layerId)
     if (JSON.stringify(this.before) === JSON.stringify(after)) return false
     this.editor.commitExecuted(new SetLayerAdjustmentsCommand(this.layerId, this.before, after))
     return true
@@ -40,6 +45,7 @@ export class AdjustmentPreviewSession {
     if (this.closed) return
     this.closed = true
     this.editor.adjustments.replace(this.layerId, this.before)
+    this.editor.document?.previewOriginals.delete(this.layerId)
   }
 
   private ensureOpen(): void { if (this.closed) throw new Error('Adjustment preview session is closed') }

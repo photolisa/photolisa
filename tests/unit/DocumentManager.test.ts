@@ -7,6 +7,29 @@ import { SelectionMask } from '../../src/core/selection/SelectionMask'
 const makeDocument = (name: string) => EditorDocument.create({ name, width: 320, height: 240, resolution: 72, background: 'transparent' })
 
 describe('DocumentManager', () => {
+  it('returns home without losing document state and cycles back into open projects', () => {
+    const manager = new DocumentManager()
+    const first = manager.open(makeDocument('First'))
+    first.editor.execute(new AddEmptyLayerCommand())
+    manager.showHome()
+    expect(manager.active).toBeNull()
+    expect(manager.count).toBe(1)
+    expect(manager.tabs.every(tab => !tab.active)).toBe(true)
+    expect(manager.hasDirty).toBe(true)
+    expect(manager.cycle(1)).toBe(first)
+    expect(first.editor.document?.layers).toHaveLength(2)
+    expect(first.editor.history.canUndo).toBe(true)
+    const second = manager.open(makeDocument('Second'))
+    manager.showHome()
+    expect(manager.cycle(-1)).toBe(second)
+    manager.showHome()
+    manager.close(second.id)
+    expect(manager.active).toBeNull()
+    manager.activate(first.id)
+    expect(manager.active).toBe(first)
+    manager.destroy()
+  })
+
   it('keeps independent editor instances, histories, tools, views and selections across switches', () => {
     const manager = new DocumentManager()
     const first = manager.open(makeDocument('First'))

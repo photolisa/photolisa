@@ -112,7 +112,7 @@ export class EditorCore {
   }
 
   private onDocumentMutation(document: EditorDocument): void {
-    this.setDirty(true)
+    if (!document.previewOriginals.size) this.setDirty(true)
     this.events.emit('document:changed', document)
   }
 

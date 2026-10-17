@@ -7,6 +7,7 @@ import {Icon} from "@iconify/vue";
 const props = defineProps<{ tabs: readonly DocumentTab[]; canReopen: boolean }>()
 const emit = defineEmits<{
   activate: [id: string]
+  home: []
   close: [id: string]
   rename: [id: string, name: string]
   reorder: [sourceId: string, targetId: string, after: boolean]
@@ -66,16 +67,18 @@ defineExpose({ renameActive: () => { const tab = props.tabs.find((item) => item.
     </button>
 
     <div class="flex items-center px-1 gap-2 min-w-0 flex-1 overflow-x-auto" role="tablist" aria-label="Open projects">
-      <div
-        class="group flex items-center justify-center w-7 shrink-0 items-center h-7 gap-2  rounded-full px-3 text-xs"
-        :class=" 'bg-white/5 ring ring-white/10 hover:ring-white/50 text-ui-secondary-text hover:bg-ui-hover'"
+      <button
+        type="button"
+        class="group flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs ring focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+        :class="tabs.some(tab => tab.active) ? 'bg-white/5 ring-white/10 text-ui-secondary-text hover:bg-ui-hover hover:ring-white/50' : 'bg-ui-elevated ring-white/50 text-ui-text'"
         role="tab"
-        draggable="false"
-        :title="`Home`"
-        @click="emit('activate', 0)"
+        :aria-selected="!tabs.some(tab => tab.active)"
+        aria-label="Home"
+        title="Home"
+        @click="emit('home')"
       >
-        <EditorIcon name="home" :size="14" class="shrink-0 text-ui-secondary-text" />
-      </div>
+        <EditorIcon name="home" :size="14" />
+      </button>
 
       <div
         v-for="tab in tabs"
