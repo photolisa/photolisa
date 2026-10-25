@@ -19,6 +19,8 @@ import { invertAffine, multiplyAffine } from '../core/geometry/LayerCoordinates'
 import { selectedObjects } from './ObjectBounds'
 import { selectionFrame } from './ObjectHandles'
 import type { CanvasAction } from './ObjectInteractionState'
+import { isLayerAlignmentAction } from '../core/transform/LayerAlignment'
+import { alignLayers } from './AlignLayers'
 
 export function performObjectAction(
   editor: EditorCore,
@@ -28,6 +30,11 @@ export function performObjectAction(
 ): void {
   const doc = editor.document
   if (!doc) return
+  if (isLayerAlignmentAction(action)) {
+    try { alignLayers(editor, action) }
+    catch (error) { onError(error instanceof Error ? error.message : 'Layer alignment failed') }
+    return
+  }
   const ids = [...doc.selectedLayerIds],
     entries = selectedObjects(doc.layers, doc.selectedLayerIds)
   if (!ids.length) return

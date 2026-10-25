@@ -3,7 +3,7 @@ import type { PixiViewportRenderer } from '../renderer/PixiViewportRenderer'
 import type { InteractionOverlay } from '../renderer/InteractionOverlay'
 import type { ToolControllerOptions } from './EditorToolController'
 import { framePoints, worldBounds } from '../core/transform/ObjectTransform'
-import { spacingMeasurements } from '../core/transform/SmartGuides'
+import type { SmartSnapResult } from '../core/transform/SmartSnapping'
 import type { Point } from '../core/geometry/LayerCoordinates'
 import { selectedObjects } from './ObjectBounds'
 import {
@@ -22,7 +22,7 @@ export function refreshObjectOverlay(
   state: {
     cropId: string | null
     drag: Drag | null
-    guides: { vertical: number | null; horizontal: number | null } | undefined
+    guides: SmartSnapResult | undefined
   },
 ): void {
   if (!['move', 'direct-selection'].includes(options.getTool())) {
@@ -85,7 +85,7 @@ export function refreshObjectOverlay(
       radiusPoint,
       measurements:
         drag?.action === 'move'
-          ? spacingMeasurements(b, drag.targets, 120 / renderer.getZoom())
+          ? (state.guides?.measurements ?? [])
           : [],
       crop: !!state.cropId,
       rotationHandle: rotationHandles(frame, renderer.getZoom())[0]!,

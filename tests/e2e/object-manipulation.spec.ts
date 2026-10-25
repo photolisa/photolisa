@@ -22,6 +22,9 @@ async function importShapes(page: Page): Promise<void> {
   ).toHaveAttribute('aria-selected', 'true')
   await page.getByLabel('Document canvas').focus()
   await page.keyboard.press('Control+1')
+  // These workflows assert free transforms independently of automatic snapping.
+  await page.getByLabel('Snap to canvas', { exact: true }).uncheck()
+  await page.getByLabel('Document canvas').focus()
 }
 async function model(page: Page) {
   return page.evaluate(async () => {

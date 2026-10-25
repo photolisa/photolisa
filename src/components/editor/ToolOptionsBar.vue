@@ -59,7 +59,8 @@ const featherRadius = ref(2)
     </template>
     <template v-else-if="tool === 'move'">
       <label class="flex items-center gap-1.5 text-ui-secondary-text"><input v-model="ui.moveAutoSelect" type="checkbox" class="accent-accent" aria-label="Auto-select layer"><span>Auto-select layer</span></label>
-      <label class="flex items-center gap-1.5 text-ui-secondary-text"><input v-model="ui.moveSnapToCanvas" type="checkbox" class="accent-accent" aria-label="Snap to canvas"><span>Snap to canvas</span></label>
+      <label class="flex items-center gap-1.5 text-ui-secondary-text" title="Snap to canvas edges, centers, other layers and equal spacing"><input v-model="ui.moveSnapToCanvas" type="checkbox" class="accent-accent" aria-label="Snap to canvas"><span>Smart snap</span></label>
+      <label v-if="ui.moveSnapToCanvas" class="flex items-center gap-1.5 text-ui-secondary-text" title="Snapping distance in screen pixels, independent of zoom">Tolerance<input :value="ui.objectSnapping.tolerance" type="number" min="0" max="40" step="1" aria-label="Smart snap tolerance" class="w-12 rounded border border-ui-border bg-ui-toolbar px-1" @change="ui.setSnapTolerance(($event.target as HTMLInputElement).value)"><span>px</span></label>
       <span class="text-ui-secondary-text">Drag an unlocked layer</span>
     </template>
     <span v-else-if="tool === 'text'" class="text-ui-secondary-text">Click the canvas to add editable text; change its content and style in Properties.</span>

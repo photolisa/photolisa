@@ -1,3 +1,5 @@
+import type { SmartSnapScene, SnapLock } from '../core/transform/SmartSnapping'
+import type { LayerAlignmentAction } from '../core/transform/LayerAlignment'
 import type { VectorGeometry } from '../core/model/types'
 import type { Point } from '../core/geometry/LayerCoordinates'
 import type {
@@ -17,6 +19,7 @@ export interface CanvasControls {
   aspectLocked: boolean
 }
 export type CanvasAction =
+  | LayerAlignmentAction
   | 'duplicate'
   | 'delete'
   | 'lock'
@@ -54,5 +57,7 @@ export interface Drag {
   duplicated: boolean
   changed: boolean
   geometryBefore: VectorGeometry | null
+  snapScene?: SmartSnapScene
+  snapLock?: SnapLock
   targets: Rect[]
 }

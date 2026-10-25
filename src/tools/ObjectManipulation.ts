@@ -1,3 +1,4 @@
+import type { SmartSnapResult } from '../core/transform/SmartSnapping'
 import type { EditorCore } from '../core/EditorCore'
 import { ObjectTransformCommand } from '../core/commands/ObjectTransformCommand'
 import { DuplicateLayerCommand } from '../core/commands/LayerCommands'
@@ -43,8 +44,7 @@ export class ObjectManipulation {
   private drag: Drag | null = null
   private pending: { event: PointerEvent; point: Point } | null = null
   private frameId: number | null = null
-  private guides:
-    { vertical: number | null; horizontal: number | null } | undefined
+  private guides: SmartSnapResult | undefined
   private overlap: { point: Point; ids: string[]; index: number } | null = null
   get dragging(): boolean {
     return this.drag !== null
@@ -356,6 +356,9 @@ export class ObjectManipulation {
           ...e,
           before: captureTransform(e.layer),
         }))
+        drag.targets = this.snapTargets(drag.entries)
+        delete drag.snapScene
+        delete drag.snapLock
       } catch (error) {
         this.cancel()
         throw error

@@ -99,6 +99,58 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 describe('on-canvas interactions', () => {
+  it('snaps a whole selection once, preserves Shift axis lock, and clears guides on cancel', () => {
+    const { editor, controller, a, b, options, overlay } = setup()
+    editor.layers.select(b.id, 'add')
+    options.getSnapToCanvas = () => true
+    options.getObjectSnapping = () => ({ tolerance: 6, grid: 0, guidesX: [], guidesY: [] })
+    const count = editor.history.retainedEntries
+    controller.pointerDown(pointer(), { x: 80, y: 70 })
+    controller.pointerMove(pointer({ shiftKey: true }), { x: 129, y: 77 })
+    frames.shift()?.(0)
+    expect(a.transform).toMatchObject({ x: 90, y: 40 })
+    expect(b.transform).toMatchObject({ x: 230, y: 40 })
+    const preview = vi.mocked(overlay.setState).mock.calls.at(-1)?.[0]
+    expect(preview?.kind).toBe('transform')
+    if (preview?.kind === 'transform') {
+      expect(preview.guides?.vertical).toBe(200)
+      expect(preview.guides?.horizontal).toBeNull()
+    }
+    controller.cancel()
+    controller.refresh()
+    expect(a.transform.x).toBe(40)
+    expect(editor.history.retainedEntries).toBe(count)
+    const restored = vi.mocked(overlay.setState).mock.calls.at(-1)?.[0]
+    if (restored?.kind === 'transform') expect(restored.guides).toBeUndefined()
+  })
+  it('uses layer targets and configured tolerance, or bypasses guides when disabled', () => {
+    const { editor, controller, a, options, overlay } = setup()
+    options.getSnapToCanvas = () => true
+    options.getObjectSnapping = () => ({ tolerance: 2, grid: 0, guidesX: [], guidesY: [] })
+    const count = editor.history.retainedEntries
+    controller.pointerDown(pointer(), { x: 80, y: 70 })
+    controller.pointerMove(pointer(), { x: 139, y: 70 })
+    controller.pointerUp(pointer())
+    // The moving right edge snaps to the other layer's left edge at 180.
+    expect(a.transform.x).toBe(100)
+    expect(editor.history.retainedEntries).toBe(count + 1)
+    editor.undo()
+    expect(a.transform.x).toBe(40)
+    editor.redo()
+    expect(a.transform.x).toBe(100)
+    editor.undo()
+    options.getSnapToCanvas = () => false
+    controller.pointerDown(pointer(), { x: 80, y: 70 })
+    controller.pointerMove(pointer(), { x: 139, y: 70 })
+    frames.shift()?.(0)
+    expect(a.transform.x).toBe(99)
+    const preview = vi.mocked(overlay.setState).mock.calls.at(-1)?.[0]
+    if (preview?.kind === 'transform') {
+      expect(preview.guides).toBeUndefined()
+      expect(preview.measurements).toEqual([])
+    }
+    controller.cancel()
+  })
   it('moves a mixed selection once per gesture and ignores another pointer', () => {
     const { editor, controller, a, b } = setup()
     editor.layers.select(b.id, 'add')

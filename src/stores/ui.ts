@@ -18,7 +18,8 @@ export const useUiStore = defineStore('ui', {
     moveAutoSelect: true,
     textResizeMode: 'box' as 'box' | 'scale',
     transformOrigin: { x: .5, y: .5 },
-    moveSnapToCanvas: false,
+    moveSnapToCanvas: true,
+    layerAlignmentReference: 'selection' as 'selection' | 'canvas',
     objectSnapping: { tolerance: 6, grid: 0, guidesX: [] as number[], guidesY: [] as number[] },
     zoom: 1,
     brush: { diameter: 32, hardness: 0.8, opacity: 1, flow: 1, spacing: 0.12, color: '#000000' },
@@ -37,6 +38,10 @@ export const useUiStore = defineStore('ui', {
     rightPanelVisible: true,
   }),
   actions: {
+    setSnapTolerance(value: unknown) {
+      const tolerance = typeof value === 'number' || typeof value === 'string' ? Number(value) : NaN
+      this.objectSnapping.tolerance = Number.isFinite(tolerance) ? Math.min(40, Math.max(0, tolerance)) : 6
+    },
     addShapePreset(name: string, geometry: VectorGeometry) { this.customShapes = saveShapePreset(this.customShapes, name, geometry); this.customShapeIndex = this.customShapes.length - 1 },
     setTool(tool: ToolId) { this.activeTool = tool },
     setZoom(zoom: number) { this.zoom = Math.min(32, Math.max(0.01, zoom)) },

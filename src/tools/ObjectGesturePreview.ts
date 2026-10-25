@@ -7,7 +7,6 @@ import {
   rotationDelta,
   setLocalMatrix,
   skewDelta,
-  snapBounds,
   worldBounds,
 } from '../core/transform/ObjectTransform'
 import {
@@ -17,6 +16,11 @@ import {
   type Point,
 } from '../core/geometry/LayerCoordinates'
 import { rasterSources } from '../raster/RasterSourceRegistry'
+import {
+  createSmartSnapScene,
+  smartSnapBounds,
+  type SmartSnapResult,
+} from '../core/transform/SmartSnapping'
 import type { Drag } from './ObjectInteractionState'
 interface PreviewOptions {
   zoom: number
@@ -35,7 +39,7 @@ export function previewObjectGesture(
   event: Pick<PointerEvent, 'shiftKey' | 'altKey'>,
   dimensions: { width: number; height: number },
   options: PreviewOptions,
-): { vertical: number | null; horizontal: number | null } | undefined {
+): SmartSnapResult | undefined {
   if (drag.action === 'radius') {
     const entry = drag.entries[0]!,
       geometry = drag.geometryBefore
@@ -95,7 +99,7 @@ export function previewObjectGesture(
     return
   }
   let delta: AffineMatrix
-  let guides: { vertical: number | null; horizontal: number | null } | undefined
+  let guides: SmartSnapResult | undefined
   if (drag.action === 'move') {
     let x = point.x - drag.start.x,
       y = point.y - drag.start.y
@@ -105,37 +109,29 @@ export function previewObjectGesture(
     }
     const b = worldBounds(drag.frame!)
     if (options.snapping) {
-      const settings = options.snapping ?? {
-        tolerance: 6,
-        grid: 0,
-        guidesX: [],
-        guidesY: [],
-      }
-      const xs = [
-          0,
-          dimensions.width / 2,
-          dimensions.width,
-          ...settings.guidesX,
-        ],
-        ys = [0, dimensions.height / 2, dimensions.height, ...settings.guidesY]
-      for (const r of drag.targets) {
-        xs.push(r.x, r.x + r.width / 2, r.x + r.width)
-        ys.push(r.y, r.y + r.height / 2, r.y + r.height)
-      }
-      const snap = snapBounds(
+      const settings = options.snapping
+      drag.snapScene ??= createSmartSnapScene(drag.targets)
+      const axis = event.shiftKey
+        ? Math.abs(point.x - drag.start.x) > Math.abs(point.y - drag.start.y)
+          ? 'x'
+          : 'y'
+        : undefined
+      const snap = smartSnapBounds(
         { ...b, x: b.x + x, y: b.y + y },
+        drag.snapScene,
         {
-          tolerance: settings.tolerance,
+          ...settings,
+          ...dimensions,
           zoom: options.zoom,
-          x: xs,
-          y: ys,
-          grid: settings.grid,
+          axis,
+          previous: drag.snapLock,
         },
       )
-      if (!event.shiftKey || y === 0) x += snap.x
-      if (!event.shiftKey || x === 0) y += snap.y
+      x += snap.x
+      y += snap.y
       guides = snap
-    }
+      drag.snapLock = snap.lock
+    } else delete drag.snapLock
     delta = [1, 0, 0, 1, x, y]
   } else if (drag.action === 'rotate')
     delta = rotationDelta(

@@ -10,6 +10,8 @@ async function createDocument(page: Page): Promise<{ x: number; y: number }> {
   await page.getByLabel('Width (px)').fill('16')
   await page.getByLabel('Height (px)').fill('16')
   await page.getByRole('button', { name: 'Create' }).click()
+  // Pixel regression fixtures move by exact offsets without magnetic snapping.
+  await page.getByLabel('Snap to canvas', { exact: true }).uncheck()
   await page.getByRole('slider', { name: 'Zoom' }).evaluate((element) => {
     const input = element as HTMLInputElement
     input.value = '400'
@@ -18,6 +20,7 @@ async function createDocument(page: Page): Promise<{ x: number; y: number }> {
   await expect(page.getByRole('contentinfo').getByText('400%', { exact: true })).toBeVisible()
   const bounds = await page.getByLabel('Document canvas').boundingBox()
   if (!bounds) throw new Error('Canvas has no bounds')
+  await page.getByLabel('Document canvas').focus()
   return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
 }
 

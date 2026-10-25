@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { CanvasAction, CanvasControls } from '~/tools/ObjectManipulation'
 import { useUiStore } from '~/stores/ui'
+import LayerAlignmentControls from './LayerAlignmentControls.vue'
 const props = defineProps<{
   controls: CanvasControls
   vectorPaint?: { fill: string; stroke: string } | null
@@ -49,7 +50,7 @@ function guides(value: string): number[] {
     .filter((n) => Number.isFinite(n) && Math.abs(n) <= 1000000)
     .slice(0, 100)
 }
-const menu = ref<'arrange' | 'transform' | null>(null)
+const menu = ref<'arrange' | 'transform' | 'align' | null>(null)
 function run(action: CanvasAction): void {
   menu.value = null
   emit('action', action)
@@ -64,6 +65,7 @@ function run(action: CanvasAction): void {
     :style="position"
     @pointerdown.stop
     @keydown.stop
+    @keydown.esc.prevent="menu = null"
   >
     <button
       v-if="controls.crop"
@@ -113,6 +115,12 @@ function run(action: CanvasAction): void {
     >
       Transform
     </button>
+    <button
+      :disabled="controls.locked || controls.crop"
+      aria-label="Align and distribute layers"
+      :aria-expanded="menu === 'align'"
+      @click="menu = menu === 'align' ? null : 'align'"
+    >Align</button>
     <template v-if="vectorPaint && !controls.locked">
       <label title="Object fill" class="flex items-center gap-1">Fill<input
         aria-label="On-canvas fill"
@@ -154,6 +162,7 @@ function run(action: CanvasAction): void {
           Send to back
         </button>
       </template>
+      <LayerAlignmentControls v-else-if="menu === 'align'" :count="controls.count" @action="run" />
       <template v-else>
         <button class="w-full text-left" @click="run('flip-x')">
           Flip horizontal
@@ -173,12 +182,13 @@ function run(action: CanvasAction): void {
           aria-label="Enable object snapping"
         /></label>
         <label class="mt-2 flex items-center justify-between">Tolerance (screen px)<input
-          v-model.number="ui.objectSnapping.tolerance"
+          :value="ui.objectSnapping.tolerance"
           type="number"
           min="0"
           max="40"
           aria-label="Snap tolerance"
           class="bg-ui-elevated w-14"
+          @change="ui.setSnapTolerance(($event.target as HTMLInputElement).value)"
         /></label>
         <label class="mt-2 flex items-center justify-between">Grid (document px)<input
           v-model.number="ui.objectSnapping.grid"

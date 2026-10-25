@@ -11,6 +11,8 @@ async function createDocument(page: Page, width = 128, height = 96): Promise<voi
   await page.getByLabel('Height (px)').fill(String(height))
   await page.getByRole('button', { name: 'Create' }).click()
   await expect(page.getByText(`${width} × ${height} px`).first()).toBeVisible()
+  await page.getByLabel('Snap to canvas', { exact: true }).uncheck()
+  await page.getByLabel('Document canvas').focus()
 }
 
 async function canvasCenter(page: Page): Promise<{ x: number; y: number }> {

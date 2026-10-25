@@ -1,3 +1,4 @@
+import { drawSmartGuides, type MoveGuides } from './SmartGuideOverlay'
 import type { SpacingMeasurement } from '../core/transform/SmartGuides'
 import type { DocumentRect } from '../raster/RasterStroke'
 import type { PixiViewportRenderer } from './PixiViewportRenderer'
@@ -14,7 +15,7 @@ export type OverlayState =
   | { kind: 'lasso-preview'; points: readonly Point[] }
   | { kind: 'move-guides'; vertical: number | null; horizontal: number | null; width: number; height: number }
   | { kind: 'crop'; rect: DocumentRect }
-  | { kind: 'transform'; corners: [Point, Point, Point, Point]; rotationHandle: Point; rotationHandles?: Point[]; measurements?: SpacingMeasurement[]; radiusPoint?: Point | undefined; crop?: boolean; guides?: { vertical: number | null; horizontal: number | null } | undefined; dimensions?: { width: number; height: number } | undefined; position?: Point }
+  | { kind: 'transform'; corners: [Point, Point, Point, Point]; rotationHandle: Point; rotationHandles?: Point[]; measurements?: SpacingMeasurement[]; radiusPoint?: Point | undefined; crop?: boolean; guides?: MoveGuides | undefined; dimensions?: { width: number; height: number } | undefined; position?: Point }
   | { kind: 'shape'; rect: DocumentRect; shape: ShapeToolId; radius: number; sides: number; innerRadius: number; customPath: string; start: Point; end: Point }
 
 interface Point { x: number; y: number }
@@ -186,20 +187,8 @@ export class InteractionOverlay {
     if (this.state.radiusPoint) { const p = this.renderer.documentToScreen(this.state.radiusPoint); drawHandle(context, p, true); context.fillText('Radius', p.x + 9, p.y - 7) }
     if (this.state.crop) context.fillText('Crop · drag image to reposition · Enter to finish', corners[0].x, Math.max(28, corners[0].y - 26))
     if (!this.state.crop) (this.state.rotationHandles ?? [this.state.rotationHandle]).map(p => this.renderer.documentToScreen(p)).forEach(p => drawHandle(context, p, true))
-    for (const measurement of this.state.measurements ?? []) {
-      const a = this.renderer.documentToScreen(measurement.from), b = this.renderer.documentToScreen(measurement.to)
-      context.save(); context.strokeStyle = '#f472b6'; context.fillStyle = '#f472b6'; context.lineWidth = 1; context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y)
-      const horizontal = Math.abs(a.y - b.y) < .001
-      for (const p of [a, b]) { context.moveTo(p.x - (horizontal ? 0 : 3), p.y - (horizontal ? 3 : 0)); context.lineTo(p.x + (horizontal ? 0 : 3), p.y + (horizontal ? 3 : 0)) }
-      context.stroke(); context.fillText(`${measurement.distance.toFixed(1)} px`, (a.x + b.x) / 2 + 4, (a.y + b.y) / 2 - 5); context.restore()
-    }
-    if (this.state.guides && this.state.dimensions) {
-      context.save(); context.strokeStyle = '#f472b6'; context.lineWidth = 1; context.setLineDash([4, 3]); context.beginPath()
-      const { vertical, horizontal } = this.state.guides, { width, height } = this.state.dimensions
-      if (vertical !== null) { const a = this.renderer.documentToScreen({ x: vertical, y: 0 }), b = this.renderer.documentToScreen({ x: vertical, y: height }); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y) }
-      if (horizontal !== null) { const a = this.renderer.documentToScreen({ x: 0, y: horizontal }), b = this.renderer.documentToScreen({ x: width, y: horizontal }); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y) }
-      context.stroke(); context.restore()
-    }
+    drawSmartGuides(context, this.state.guides, this.state.measurements ?? [], this.state.dimensions,
+      point => this.renderer.documentToScreen(point))
   }
 }
 

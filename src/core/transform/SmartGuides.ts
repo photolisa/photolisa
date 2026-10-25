@@ -4,6 +4,7 @@ export interface SpacingMeasurement {
   from: Point
   to: Point
   distance: number
+  equal?: boolean
 }
 /** Nearest separated neighbors on each side, measured in document pixels. */
 export function spacingMeasurements(
