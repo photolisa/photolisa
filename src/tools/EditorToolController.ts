@@ -88,6 +88,7 @@ export class EditorToolController {
   private transformBaseline: { layerId: string; transform: LayerTransform } | null = null
   private spacePressed = false
   private currentTool: ToolId = 'move'
+  private sprayFrame: number | null = null
   private sampleFrame: number | null = null
   private pendingSample: { x: number; y: number } | null = null
   private activePointerId: number | null = null
@@ -350,7 +351,8 @@ export class EditorToolController {
     if (!gesture) return
     const point = this.renderer.clientToDocument(event.clientX, event.clientY)
     if (gesture.kind === 'stroke') {
-      const events = event.getCoalescedEvents?.() ?? [event]
+      const coalesced = event.getCoalescedEvents?.()
+      const events = coalesced?.length ? coalesced : [event]
       events.forEach((sample) => gesture.session.addPoint(this.renderer.clientToDocument(sample.clientX, sample.clientY), pressureOf(sample)))
       this.renderer.updateRasterSource(gesture.session.sourceId)
     } else if (gesture.kind === 'retouch') {
@@ -534,7 +536,31 @@ export class EditorToolController {
     this.drawingOverlay.setCursor(this.lastCursorClient.x, this.lastCursorClient.y, tool === 'clone-stamp' || tool === 'spot-repair' ? 'brush' : tool, diameter)
   }
 
+  private stopSpray(): void {
+    if (this.sprayFrame !== null) cancelAnimationFrame(this.sprayFrame)
+    this.sprayFrame = null
+  }
+
+  private startSpray(session: RasterStrokeSession): void {
+    if (!session.continuous) return
+    let previous = performance.now()
+    const tick = (now: number): void => {
+      this.sprayFrame = null
+      if (this.gesture?.kind !== 'stroke' || this.gesture.session !== session) return
+      // Bound catch-up after a slow frame; never dump a background tab's elapsed time.
+      const steps = Math.min(3, Math.floor((now - previous) / 40))
+      if (steps > 0) {
+        for (let i = 0; i < steps; i++) session.deposit()
+        previous = now
+        this.renderer.updateRasterSource(session.sourceId)
+      }
+      this.sprayFrame = requestAnimationFrame(tick)
+    }
+    this.sprayFrame = requestAnimationFrame(tick)
+  }
+
   private commitStroke(session: RasterStrokeSession): void {
+    this.stopSpray()
     const command = session.finish()
     if (command) this.editor.commitExecuted(command)
     this.renderer.updateRasterSource(session.sourceId)
@@ -542,6 +568,7 @@ export class EditorToolController {
   }
 
   private abortStroke(session: RasterStrokeSession): void {
+    this.stopSpray()
     session.abort()
     this.renderer.updateRasterSource(session.sourceId)
     this.renderer.refreshDocument()
@@ -585,7 +612,9 @@ export class EditorToolController {
       return
     }
     try {
-      const settings = tool === 'pencil' ? this.options.getPencil() : this.options.getBrush()
+      const currentBrush = this.options.getBrush()
+      const settings = tool === 'pencil' ? this.options.getPencil() : tool === 'eraser'
+        ? { ...currentBrush, preset: 'hard-round' as const, tip: 'round' as const, texture: 0, scatter: 0, roundness: 1 } : currentBrush
       const maskTarget = this.editor.maskEditingLayerId === layer.id && !!layer.mask
       const gray = Math.round(0.2126 * parseInt(settings.color.slice(1, 3), 16) + 0.7152 * parseInt(settings.color.slice(3, 5), 16) + 0.0722 * parseInt(settings.color.slice(5, 7), 16))
       const grayHex = `#${gray.toString(16).padStart(2, '0').repeat(3)}`
@@ -596,6 +625,7 @@ export class EditorToolController {
       session.addPoint(point, pressureOf(event))
       this.renderer.updateRasterSource(session.sourceId)
       this.gesture = { kind: 'stroke', session }
+      this.startSpray(session)
     } catch (error) {
       this.options.onError(error instanceof Error ? error.message : 'The stroke could not be started.')
     }

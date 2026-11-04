@@ -1,3 +1,5 @@
+import { resolveBrush, type BrushDynamics } from './BrushPresets'
+import { dabSpacing, dashVisible, paintBrushDab } from './BrushTip'
 import type { Command } from '../core/commands/Command'
 import type { EditorCore } from '../core/EditorCore'
 import type { EditorDocument } from '../core/model/EditorDocument'
@@ -13,7 +15,7 @@ const TILE_SIZE = 128
 
 export interface DocumentPoint { x: number; y: number }
 export interface DocumentRect { x: number; y: number; width: number; height: number }
-export interface BrushSettings { diameter: number; hardness: number; opacity: number; color: string; colorAlpha?: number; flow?: number; spacing?: number }
+export interface BrushSettings extends Partial<BrushDynamics> { diameter: number; hardness: number; opacity: number; color: string; colorAlpha?: number; flow?: number; spacing?: number }
 export interface PencilSettings { diameter: number; opacity: number; color: string; colorAlpha?: number; pixelGrid?: boolean }
 export type StrokeMode = 'brush' | 'pencil' | 'eraser'
 
@@ -30,6 +32,8 @@ export class RasterStrokeService {
     selection: SelectionMask | null,
     target: 'pixels' | 'mask' = 'pixels',
   ): RasterStrokeSession {
+    const snapshot = mode === 'pencil' ? { ...settings } : { ...settings, ...resolveBrush(settings) }
+    parseColor(snapshot.color)
     let worldMatrix = editableRasterWorldMatrix(editorDocument.layers, layer.id)
     if (!worldMatrix) throw new Error('Select a visible, unlocked raster layer before painting.')
     let inverseMatrix = invertAffine(worldMatrix)
@@ -59,7 +63,7 @@ export class RasterStrokeService {
     const editedId = target === 'mask' ? layer.mask!.pixelSourceId : layer.pixelSourceId
     const canvas = this.sources.getEditableCanvas(editedId ?? '')
     if (!canvas || !editedId) throw new Error('The active layer could not be made editable')
-    return new RasterStrokeSession(layer, canvas, originalSourceId, editedId, settings, mode, selection, this.sources, worldMatrix, inverseMatrix, target, expansion, editorDocument.dimensions)
+    return new RasterStrokeSession(layer, canvas, originalSourceId, editedId, snapshot, mode, selection, this.sources, worldMatrix, inverseMatrix, target, expansion, editorDocument.dimensions)
   }
 }
 
@@ -69,6 +73,10 @@ export class RasterStrokeSession {
   private readonly dirtyTiles = new Set<string>()
   private lastPoint: { local: DocumentPoint; pressure: number } | null = null
   private distanceToNextDab = 0
+  private pathDistance = 0
+  private dabIndex = 0
+  private readonly seed = Math.floor(Math.random() * 0x7fffffff)
+  private readonly brush: BrushDynamics
   private ended = false
   private pendingDirty: DocumentRect | null = null
   private readonly color: readonly [number, number, number]
@@ -92,6 +100,7 @@ export class RasterStrokeSession {
   ) {
     const context = canvas.getContext('2d', { willReadFrequently: true })
     if (!context) throw new Error('2D canvas is unavailable')
+    this.brush = resolveBrush(settings)
     this.context = context
     this.color = parseColor(settings.color)
     this.colorAlpha = Math.max(0, Math.min(1, settings.colorAlpha ?? 1))
@@ -100,17 +109,18 @@ export class RasterStrokeSession {
   addPoint(documentPoint: DocumentPoint, pressure: number): void {
     if (this.ended) return
     if (this.colorAlpha <= 0 || this.settings.opacity <= 0) return
+    if (!Number.isFinite(documentPoint.x) || !Number.isFinite(documentPoint.y)) return
     const local = transformPoint(this.inverseMatrix, documentPoint)
     const normalizedPressure = Math.max(0.01, Math.min(1, pressure > 0 ? pressure : this.lastPoint?.pressure ?? 1))
     if (!this.lastPoint) {
-      if (this.mode === 'pencil') this.pencilDab(Math.floor(local.x), Math.floor(local.y))
+      if (this.isPixelStroke()) this.pencilDab(Math.floor(local.x), Math.floor(local.y))
       else this.brushDab(local, normalizedPressure)
       this.distanceToNextDab = this.brushSpacing()
       this.flushDirty()
       this.lastPoint = { local, pressure: normalizedPressure }
       return
     }
-    if (this.mode === 'pencil') {
+    if (this.isPixelStroke()) {
       const from = { x: Math.floor(this.lastPoint.local.x), y: Math.floor(this.lastPoint.local.y) }
       const to = { x: Math.floor(local.x), y: Math.floor(local.y) }
       let first = true
@@ -123,13 +133,14 @@ export class RasterStrokeSession {
       let traveled = this.distanceToNextDab
       while (traveled <= distance && distance > 0) {
         const ratio = traveled / distance
-        this.brushDab({
+        if (dashVisible(this.brush, this.pathDistance + traveled)) this.brushDab({
           x: this.lastPoint.local.x + (local.x - this.lastPoint.local.x) * ratio,
           y: this.lastPoint.local.y + (local.y - this.lastPoint.local.y) * ratio,
         }, this.lastPoint.pressure + (normalizedPressure - this.lastPoint.pressure) * ratio)
         traveled += this.brushSpacing()
       }
       this.distanceToNextDab = traveled - distance
+      this.pathDistance += distance
     }
     this.flushDirty()
     this.lastPoint = { local, pressure: normalizedPressure }
@@ -169,36 +180,33 @@ export class RasterStrokeSession {
     if (this.expansion?.maskSourceId) this.sources.remove(this.expansion.maskSourceId)
   }
 
-  private brushSpacing(): number {
-    const settings = this.settings as BrushSettings
-    return Math.max(0.25, settings.diameter * Math.max(0.01, Math.min(2, settings.spacing ?? 0.12)))
+  /** Time-based deposition is driven by the controller and stops with the gesture. */
+  get continuous(): boolean {
+    return this.mode === 'brush' && ['airbrush', 'spray-paint'].includes(this.brush.preset)
   }
 
+  deposit(): void {
+    if (this.ended || !this.lastPoint || !this.continuous) return
+    this.brushDab(this.lastPoint.local, this.lastPoint.pressure)
+    this.flushDirty()
+  }
+
+  private isPixelStroke(): boolean {
+    return this.mode === 'pencil' || this.brush.tip === 'pixel'
+  }
+
+  private brushSpacing(): number { return dabSpacing(this.brush) }
+
   private brushDab(point: DocumentPoint, pressure: number): void {
-    const settings = this.settings as BrushSettings
-    const radius = Math.max(0.5, settings.diameter * Math.max(0.1, pressure) / 2)
-    const inner = Math.max(0, Math.min(1, settings.hardness)) * radius
-    const flow = Math.max(0, Math.min(1, settings.flow ?? 1)) * pressure
-    if (flow <= 0) return
-    const left = Math.max(0, Math.floor(point.x - radius - 1))
-    const top = Math.max(0, Math.floor(point.y - radius - 1))
-    const right = Math.min(this.canvas.width - 1, Math.ceil(point.x + radius + 1))
-    const bottom = Math.min(this.canvas.height - 1, Math.ceil(point.y + radius + 1))
-    for (let y = top; y <= bottom; y++) for (let x = left; x <= right; x++) {
-      const distance = Math.hypot(x + 0.5 - point.x, y + 0.5 - point.y)
-      // One-pixel edge coverage keeps round tips smooth even at 100% hardness.
-      const outer = Math.min(1, Math.max(0, radius + 0.5 - distance))
-      if (outer <= 0) continue
-      const softness = distance <= inner ? 1 : inner >= radius ? 1 : Math.max(0, (radius + 0.5 - distance) / (radius + 0.5 - inner))
-      this.paintPixel(x, y, flow * outer * softness)
-    }
+    paintBrushDab(this.brush, { ...point, pressure, index: this.dabIndex++, seed: this.seed },
+      this.canvas.width, this.canvas.height, (x, y, strength) => this.paintPixel(x, y, strength))
   }
 
   private pencilDab(x: number, y: number): void {
-    const size = Math.max(1, Math.round(this.settings.diameter))
+    const size = Math.max(1, Math.round(this.mode === 'pencil' ? this.settings.diameter : this.brush.diameter))
     const left = x - Math.floor((size - 1) / 2)
     const top = y - Math.floor((size - 1) / 2)
-    for (let row = top; row < top + size; row++) for (let column = left; column < left + size; column++) this.paintPixel(column, row, 1)
+    for (let row = top; row < top + size; row++) for (let column = left; column < left + size; column++) this.paintPixel(column, row, this.mode === 'pencil' ? 1 : this.brush.flow)
   }
 
   private paintPixel(x: number, y: number, strength: number): void {

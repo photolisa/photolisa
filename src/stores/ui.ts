@@ -1,3 +1,4 @@
+import { brushPreset } from '../raster/BrushPresets'
 import { DEFAULT_SHAPES, loadShapeLibrary, saveShapePreset } from '../persistence/VectorShapeLibrary'
 import type { VectorGeometry } from '../core/model/types'
 import { defineStore } from 'pinia'
@@ -22,7 +23,7 @@ export const useUiStore = defineStore('ui', {
     layerAlignmentReference: 'selection' as 'selection' | 'canvas',
     objectSnapping: { tolerance: 6, grid: 0, guidesX: [] as number[], guidesY: [] as number[] },
     zoom: 1,
-    brush: { diameter: 32, hardness: 0.8, opacity: 1, flow: 1, spacing: 0.12, color: '#000000' },
+    brush: { ...brushPreset('hard-round').settings, color: '#000000' },
     pencil: { diameter: 1, opacity: 1, pixelGrid: false },
     bucket: { tolerance: 10, opacity: 1 },
     shape: { creationMode: 'layer' as 'layer' | 'compound', fill: '#000000', fillOpacity: 1, stroke: null as string | null, strokeOpacity: 1, strokeWidth: 1, opacity: 1, cornerRadius: 16, sides: 5, innerRadius: .5 },
@@ -38,6 +39,9 @@ export const useUiStore = defineStore('ui', {
     rightPanelVisible: true,
   }),
   actions: {
+    selectBrushPreset(id: unknown) {
+      this.brush = { ...brushPreset(id).settings, color: this.brush.color }
+    },
     setSnapTolerance(value: unknown) {
       const tolerance = typeof value === 'number' || typeof value === 'string' ? Number(value) : NaN
       this.objectSnapping.tolerance = Number.isFinite(tolerance) ? Math.min(40, Math.max(0, tolerance)) : 6

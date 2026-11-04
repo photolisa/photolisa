@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import BrushSettings from './BrushSettings.vue'
 import { useUiStore } from '../../stores/ui'
 import type { ToolId } from '~/stores/ui'
 import { colorHex, colorRgbHex, colorRgba } from '~/raster/SampledColor'
@@ -14,11 +15,12 @@ const featherRadius = ref(2)
   <div class="tool-options flex h-10 shrink-0 items-center gap-3 overflow-x-auto whitespace-nowrap bg-[#141414] border-b border-white/10 px-3 text-xs text-ui-text">
     <span class="w-20 font-medium capitalize text-ui-text">{{ ['marquee', 'ellipse-marquee', 'lasso'].includes(tool) ? 'Selection' : tool }}</span>
     <template v-if="tool === 'brush' || tool === 'eraser' || tool === 'clone-stamp' || tool === 'spot-repair'">
+      <BrushSettings v-if="tool === 'brush'" />
       <label class="option"><span>Size</span><input v-model.number="ui.brush.diameter" type="range" min="1" max="500"><span>{{ ui.brush.diameter }} px</span></label>
-      <label class="option"><span>Hardness</span><input v-model.number="ui.brush.hardness" type="range" min="0" max="1" step="0.05"><span>{{ Math.round(ui.brush.hardness * 100) }}%</span></label>
+      <label v-if="tool !== 'brush' || !['spray', 'splatter', 'pixel'].includes(ui.brush.tip)" class="option"><span>Hardness</span><input v-model.number="ui.brush.hardness" type="range" min="0" max="1" step="0.05"><span>{{ Math.round(ui.brush.hardness * 100) }}%</span></label>
       <label class="option"><span>Opacity</span><input v-model.number="ui.brush.opacity" type="range" min="0.01" max="1" step="0.01"><span>{{ Math.round(ui.brush.opacity * 100) }}%</span></label>
       <label v-if="tool === 'brush'" class="option"><span>Flow</span><input v-model.number="ui.brush.flow" type="range" min="0.01" max="1" step="0.01"><span>{{ Math.round(ui.brush.flow * 100) }}%</span></label>
-      <label v-if="tool === 'brush'" class="option"><span>Spacing</span><input v-model.number="ui.brush.spacing" type="range" min="0.01" max="2" step="0.01"><span>{{ Math.round(ui.brush.spacing * 100) }}%</span></label>
+      <label v-if="tool === 'brush' && ui.brush.tip !== 'pixel'" class="option"><span>Spacing</span><input v-model.number="ui.brush.spacing" type="range" min="0.01" max="4" step="0.01"><span>{{ Math.round(ui.brush.spacing * 100) }}%</span></label>
       <span v-if="tool === 'clone-stamp'" class="text-ui-secondary-text">Alt-click to sample, then drag to clone. Duplicate the layer first for nondestructive work.</span>
       <span v-if="tool === 'spot-repair'" class="text-ui-secondary-text">Click a small blemish to blend it with surrounding pixels.</span>
     </template>
