@@ -77,7 +77,7 @@ onBeforeUnmount(() => { if (previewFrame !== null) cancelAnimationFrame(previewF
         <template v-if="ui.brush.tip !== 'pixel'">
           <label class="flex items-center gap-2"><input v-model="ui.brush.pressureSize" type="checkbox" class="accent-accent">Pen pressure controls size</label>
           <label class="flex items-center gap-2"><input v-model="ui.brush.pressureFlow" type="checkbox" class="accent-accent">Pen pressure controls ink strength</label>
-          <span class="text-ui-secondary-text">A mouse uses constant pressure.</span>
+          <span class="text-ui-secondary-text">Tablet pens use pressure supplied by your browser. Mouse and touch use constant pressure. Flip a supported pen to erase while using Brush, Pencil, or Eraser.</span>
         </template>
         <button class="mt-1 rounded border border-ui-border px-2 py-1.5 hover:bg-ui-hover" @click="ui.selectBrushPreset(ui.brush.preset)">Reset preset settings</button>
       </div>

@@ -29,6 +29,7 @@ import { paintTextLayer } from '../raster/TextPainter'
 import { PaintBucketService } from '../raster/PaintBucket'
 import { layerAtPoint } from './LayerHitTest'
 import { snapMove } from './MoveSnapping'
+import { isPenEraser, pressureOf, strokeSamples } from './TabletInput'
 
 export interface EyedropperSample {
   color: SampledColor
@@ -285,11 +286,24 @@ export class EditorToolController {
   }
 
   private readonly onPointerDown = (event: PointerEvent): void => {
+    if (this.activePointerId !== null && this.activePointerId !== event.pointerId) return
     if (event.button === 1 && this.objects.dragging) { this.objects.cancel(); this.releasePointer(); this.refreshOverlay() }
-    if (event.button !== 0 || this.spacePressed || this.activePointerId !== null) return
+    const eraser = isPenEraser(event)
+    if ((!eraser && event.button !== 0) || this.spacePressed || this.activePointerId !== null) return
     this.canvas.focus({ preventScroll: true })
     const documentPoint = this.renderer.clientToDocument(event.clientX, event.clientY)
     const tool = this.options.getTool()
+    if (eraser) {
+      if (tool === 'brush' || tool === 'pencil' || tool === 'eraser') {
+        this.beginStroke(event, documentPoint, 'eraser')
+        if (this.gesture) {
+          event.preventDefault()
+          this.canvas.setPointerCapture(event.pointerId)
+          this.activePointerId = event.pointerId
+        }
+      }
+      return
+    }
     if (this.objects.pointerDown(event, documentPoint)) { this.canvas.setPointerCapture(event.pointerId); this.activePointerId = event.pointerId; return }
     if (this.multiTransform.pointerDown(event, documentPoint)) { this.canvas.setPointerCapture(event.pointerId); this.activePointerId = event.pointerId; return }
     if (this.vectorTools.pointerDown(event, documentPoint)) { this.canvas.setPointerCapture(event.pointerId); this.activePointerId = event.pointerId; return }
@@ -330,6 +344,7 @@ export class EditorToolController {
   }
 
   private readonly onPointerMove = (event: PointerEvent): void => {
+    if (this.activePointerId !== null && this.activePointerId !== event.pointerId) return
     if (!this.gesture && !this.spacePressed && this.objects.pointerMove(event, this.renderer.clientToDocument(event.clientX, event.clientY))) return
     if (this.multiTransform.pointerMove(event, this.renderer.clientToDocument(event.clientX, event.clientY))) return
     if (this.vectorTools.pointerMove(event, this.renderer.clientToDocument(event.clientX, event.clientY))) return
@@ -351,8 +366,7 @@ export class EditorToolController {
     if (!gesture) return
     const point = this.renderer.clientToDocument(event.clientX, event.clientY)
     if (gesture.kind === 'stroke') {
-      const coalesced = event.getCoalescedEvents?.()
-      const events = coalesced?.length ? coalesced : [event]
+      const events = strokeSamples(event)
       events.forEach((sample) => gesture.session.addPoint(this.renderer.clientToDocument(sample.clientX, sample.clientY), pressureOf(sample)))
       this.renderer.updateRasterSource(gesture.session.sourceId)
     } else if (gesture.kind === 'retouch') {
@@ -413,7 +427,7 @@ export class EditorToolController {
     const gesture = this.gesture
     if (!gesture) return
     if (gesture.kind === 'stroke') {
-      gesture.session.addPoint(this.renderer.clientToDocument(event.clientX, event.clientY), event.pointerType === 'mouse' ? 1 : event.pressure)
+      gesture.session.addPoint(this.renderer.clientToDocument(event.clientX, event.clientY), pressureOf(event))
       this.commitStroke(gesture.session)
     } else if (gesture.kind === 'retouch') {
       this.editor.commitTransaction()
@@ -474,8 +488,8 @@ export class EditorToolController {
   }
 
   private readonly onPointerCancel = (event: PointerEvent): void => {
-    this.objects.cancel()
     if (this.activePointerId !== event.pointerId) return
+    this.objects.cancel()
     if (this.multiTransform.active || this.gesture?.kind === 'transform') { this.cancel(); this.refreshOverlay(); return }
     this.multiTransform.cancel()
     this.vectorTools.cancel()
@@ -795,7 +809,6 @@ export class EditorToolController {
   private readonly onKeyUp = (event: KeyboardEvent): void => { if (event.code === 'Space') this.spacePressed = false }
 }
 
-function pressureOf(event: PointerEvent): number { return event.pointerType === 'mouse' ? 1 : Math.max(0.01, event.pressure) }
 function selectionOperation(event: PointerEvent): SelectionOperation { return event.shiftKey && event.altKey ? 'intersect' : event.shiftKey ? 'add' : event.altKey ? 'subtract' : 'new' }
 function normalizedRect(a: DocumentPoint, b: DocumentPoint): DocumentRect {
   return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) }
