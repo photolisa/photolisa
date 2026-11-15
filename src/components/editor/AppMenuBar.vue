@@ -26,6 +26,7 @@ const emit = defineEmits<{
   exportImage: [format: 'png' | 'jpeg' | 'webp']
   exportPsd: []
   exportSvg: []
+  exportEps: []
   exportIco: []
   exportPdf: []
   undo: []
@@ -119,6 +120,7 @@ onUnmounted(() => window.removeEventListener('pointerdown', onOutside))
             <button class="menu-item" :disabled="!canExport" @click="run(() => emit('exportImage', 'webp'))"><span>Export WebP…</span></button>
             <button class="menu-item" :disabled="!canExport" @click="run(() => emit('exportPsd'))"><span>Export PSD…</span></button>
             <button class="menu-item" :disabled="!canExport" @click="run(() => emit('exportSvg'))"><span>Export SVG…</span></button>
+            <button class="menu-item" :disabled="!canExport" @click="run(() => emit('exportEps'))"><span>Export EPS (flattened)…</span></button>
             <button class="menu-item" :disabled="!canExport" @click="run(() => emit('exportPdf'))"><span>Export As PDF…</span></button>
             <button class="menu-item" :disabled="!canExport" @click="run(() => emit('exportIco'))"><span>Export ICO…</span></button>
           </template>

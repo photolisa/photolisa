@@ -11,7 +11,7 @@ export async function pickEditorFile(fallback: HTMLInputElement): Promise<File |
   const picker = (window as PickerWindow).showOpenFilePicker
   if (!picker) { fallback.click(); return null }
   try {
-    const [handle] = await picker({ multiple: false, types: [{ description: 'Photolisa, PDF, PSD, SVG, ICO or image', accept: { 'application/pdf': ['.pdf'], 'application/x-photolisa': ['.photolisa'], 'image/vnd.adobe.photoshop': ['.psd'], 'image/svg+xml': ['.svg'], 'image/x-icon': ['.ico'], 'image/png': ['.png'], 'image/jpeg': ['.jpg', '.jpeg'], 'image/webp': ['.webp'] } }] })
+    const [handle] = await picker({ multiple: false, types: [{ description: 'Photolisa, PDF, PSD, SVG, EPS, ICO or image', accept: { 'application/pdf': ['.pdf'], 'application/x-photolisa': ['.photolisa'], 'image/vnd.adobe.photoshop': ['.psd'], 'image/svg+xml': ['.svg'], 'application/postscript': ['.eps', '.epsf', '.epsi'], 'image/x-icon': ['.ico'], 'image/png': ['.png'], 'image/jpeg': ['.jpg', '.jpeg'], 'image/webp': ['.webp'] } }] })
     return handle ? await handle.getFile() : null
   } catch (error) { if ((error as DOMException).name === 'AbortError') return null; throw error }
 }

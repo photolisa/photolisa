@@ -19,6 +19,8 @@ import { CreateLayerMaskCommand, SetLayerMaskCommand, type MaskCreation } from '
 import { rasterSources } from '~/raster/RasterSourceRegistry'
 import { DEFAULT_TEXT, UpdateTextLayerCommand, propertiesOf, type TextProperties } from '~/core/commands/TextCommands'
 import { loadTextFont } from '~/raster/TextPainter'
+import { traceRasterSource } from '~/raster/RasterVectorizer'
+import { VectorizeRasterCommand } from '~/core/commands/VectorizeRasterCommand'
 
 const props = defineProps<{ mode: 'simple' | 'pro'; document: EditorDocument | null; revision: number; projectTabs: readonly DocumentTab[] }>()
 const emit = defineEmits<{ collapse: []; transfer: [payload: { layerIds: string[]; targetId: string; mode: 'copy' | 'move' | 'duplicate'; centerInDestination: boolean }] }>()
@@ -59,8 +61,41 @@ const activeLayer = computed(() => {
   void props.revision
   return props.document?.activeLayerId ? findLayer(props.document.layers, props.document.activeLayerId) : null
 })
+const traceBusy = ref(false)
+const traceError = ref<string | null>(null)
+let traceAbort: AbortController | null = null
+
+async function vectorizeActiveLayer(): Promise<void> {
+  const layer = activeLayer.value
+  const document = props.document
+  if (!layer || layer.kind !== 'raster' || !document || traceBusy.value) return
+  traceError.value = null
+  if (layer.locked || !layer.visible || layer.crop || layer.mask?.enabled || layer.adjustments.some(adjustment => adjustment.enabled)) {
+    traceError.value = 'Vectorize a visible, unlocked raster layer without an active crop, mask, or adjustment.'
+    return
+  }
+  const source = layer.pixelSourceId ? rasterSources.get(layer.pixelSourceId) : null
+  if (!source) { traceError.value = 'This layer has no raster pixels to trace.'; return }
+  const revision = document.revision
+  const sourceRevision = source.revision
+  traceBusy.value = true
+  const controller = new AbortController()
+  traceAbort = controller
+  try {
+    const result = await traceRasterSource(source, controller.signal)
+    if (controller.signal.aborted || editorCore.document !== document || document.revision !== revision || source.revision !== sourceRevision)
+      return
+    editorCore.execute(new VectorizeRasterCommand(layer.id, result.layers, result.width, result.height, source.width, source.height))
+  } catch (error) {
+    if (!controller.signal.aborted) traceError.value = error instanceof Error ? error.message : 'The raster layer could not be vectorized.'
+  } finally {
+    if (traceAbort === controller) traceAbort = null
+    traceBusy.value = false
+  }
+}
 
 watch(activeLayer, async (layer) => {
+  traceError.value = null
   if (props.mode === 'simple' && (layer?.kind === 'vector' || layer?.kind === 'text')) activePanel.value = 'properties'
   if (layer?.kind !== 'text') return
   textDraft.value = propertiesOf(layer)
@@ -161,7 +196,7 @@ function beginVerticalResize(event: PointerEvent): void {
 }
 
 let stopResize: (() => void) | null = null
-onUnmounted(() => stopResize?.())
+onUnmounted(() => { stopResize?.(); traceAbort?.abort() })
 
 function trackPointer(move: (event: PointerEvent) => void): void {
   stopResize?.()
@@ -267,6 +302,11 @@ function formatNumber(value: number): string {
               <button class="mask-action" :disabled="activeLayer.locked" @click="changeMask('remove')">Remove</button>
               <span v-if="editorCore.maskEditingLayerId === activeLayer.id" class="self-center text-accent">Painting mask</span>
             </div>
+          </div>
+          <div v-if="activeLayer.kind === 'raster' && activePanel !== 'adjustments'" class="space-y-1 border-t border-ui-border pt-2">
+            <button class="w-full border border-ui-border px-2 py-1 text-left text-ui-text hover:bg-ui-hover disabled:opacity-40" :disabled="traceBusy || activeLayer.locked || !activeLayer.visible || !activeLayer.pixelSourceId || !!activeLayer.crop || !!activeLayer.mask?.enabled || activeLayer.adjustments.some(adjustment => adjustment.enabled)" title="Trace this raster into editable color paths; the original layer is hidden" @click="vectorizeActiveLayer">{{ traceBusy ? 'Tracing image…' : 'Vectorize layer (8 colors)' }}</button>
+            <p class="text-[10px] text-ui-secondary-text">Creates editable paths above the original layer. Fine photo detail is simplified.</p>
+            <p v-if="traceError" role="alert" class="text-[10px] text-red-400">{{ traceError }}</p>
           </div>
           <div v-show="activePanel !== 'adjustments'" v-else-if="activeLayer.kind === 'vector'" class="space-y-2" aria-label="Vector style">
             <VectorPaintPanel :layer="activeLayer" :revision="revision" />

@@ -39,7 +39,7 @@ const {
   recovery, compatibilityWarnings, tabBar, canvasWorkspace, tabControls, openNewDocument,
   create, selectTool, applyImageOperation, transformCanvas, featherSelection, editSelection,
   pasteSelection, pasteExternalImage, handleImport, openIcoResolution, exportIco, chooseFile,
-  requestExportImage, exportImage, saveProject, exportPsd, exportSvg, recoverAutosave,
+  requestExportImage, exportImage, saveProject, exportPsd, exportSvg, exportEps, recoverAutosave,
   onFileSelected, onViewChange, transferLayers, onTransferDrop, undo, redo,
 } = useEditorWorkspace()
 const effectLayer = computed(() => {
@@ -73,6 +73,7 @@ const effectLayer = computed(() => {
       @export-image="requestExportImage"
       @export-psd="exportPsd"
       @export-svg="exportSvg"
+      @export-eps="exportEps"
       @export-pdf="pdf.requestExport"
       @export-ico="showIcoExport = true"
       @undo="undo"
@@ -128,7 +129,7 @@ const effectLayer = computed(() => {
       <EditorRightPanels v-show="layout.panelsVisible.value" :key="currentDocument?.id ?? 'empty'" :mode="layout.mode.value" :document="currentDocument" :revision="currentDocument?.revision ?? 0" :project-tabs="tabs" @collapse="layout.togglePanels" @transfer="transferLayers" />
     </div>
     <EditorStatusBar :document="currentDocument" :zoom="ui.zoom" @zoom="canvasWorkspace?.setZoom($event)" />
-    <input ref="fileInput" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,image/vnd.microsoft.icon,image/vnd.adobe.photoshop,.png,.jpg,.jpeg,.webp,.svg,.ico,.psd,.photolisa,.pdf,application/pdf" @change="onFileSelected">
+    <input ref="fileInput" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,image/vnd.microsoft.icon,image/vnd.adobe.photoshop,application/postscript,.png,.jpg,.jpeg,.webp,.svg,.eps,.epsf,.epsi,.ico,.psd,.photolisa,.pdf,application/pdf" @change="onFileSelected">
     <div v-if="recovery" class="fixed left-1/2 top-20 z-50 flex -translate-x-1/2 items-center gap-4 border border-accent/50 bg-ui-panel px-4 py-3 text-xs shadow-2xl">
       <span>Autosave available for {{ recovery.name }}</span><button class="text-accent hover:text-ui-text" @click="recoverAutosave">Recover</button><button class="text-ui-secondary-text hover:text-ui-text" @click="recovery = null">Dismiss</button>
     </div>

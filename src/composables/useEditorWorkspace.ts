@@ -174,6 +174,16 @@ export function useEditorWorkspace() {
       } else if (/\.svg$/i.test(file.name) || file.type === 'image/svg+xml') {
         const { SvgImporter } = await import('../adapters/SvgImporter')
         const opened = await new SvgImporter().import(file); tabControls.prepareOpen(); openDocument(opened.document); warningsByDocument.set(opened.document.id, opened.warnings)
+      } else if (/\.(?:eps|epsf|epsi)$/i.test(file.name) || file.type === 'application/postscript') {
+        const { EpsAdapter } = await import('../adapters/EpsAdapter')
+        const decoded = await new EpsAdapter().import(file)
+        const pixelSourceId = rasterSources.register(decoded.bitmap)
+        try {
+          tabControls.prepareOpen()
+          importDocument({ name: decoded.name, width: decoded.width, height: decoded.height, resolution: 72, pixelSourceId })
+          const activeId = manager.active?.id
+          if (activeId) warningsByDocument.set(activeId, decoded.warnings)
+        } catch (error) { rasterSources.remove(pixelSourceId); throw error }
       } else if (/\.ico$/i.test(file.name) || file.type === 'image/x-icon' || file.type === 'image/vnd.microsoft.icon') {
         const entries = await ico.inspect(file)
         pendingIco.value = { file, entries }
@@ -262,6 +272,18 @@ export function useEditorWorkspace() {
     const document = currentDocument.value; if (!document) return
     try { const { SvgExporter } = await import('../adapters/SvgExporter'); const result = await new SvgExporter().export(document); warningsByDocument.set(document.id, result.warnings); compatibilityWarnings.value = result.warnings; await saveEditorFile(result.blob, `${safeName(document.name)}.svg`) }
     catch (error) { importError.value = error instanceof Error ? error.message : 'The SVG could not be exported.' }
+  }
+
+  async function exportEps(): Promise<void> {
+    const document = currentDocument.value; if (!document) return
+    try {
+      const { EpsAdapter } = await import('../adapters/EpsAdapter')
+      const result = await new EpsAdapter().export(document, exporter)
+      if (await saveEditorFile(result.blob, `${safeName(document.name)}.eps`)) {
+        warningsByDocument.set(document.id, result.warnings)
+        compatibilityWarnings.value = result.warnings
+      }
+    } catch (error) { importError.value = error instanceof Error ? error.message : 'The EPS could not be exported.' }
   }
 
   async function recoverAutosave(): Promise<void> {
@@ -356,7 +378,7 @@ export function useEditorWorkspace() {
     recovery, compatibilityWarnings, tabBar, canvasWorkspace, tabControls, openNewDocument,
     create, selectTool, applyImageOperation, transformCanvas, featherSelection, editSelection,
     pasteSelection, pasteExternalImage, handleImport, openIcoResolution, exportIco, chooseFile,
-    requestExportImage, exportImage, saveProject, exportPsd, exportSvg, recoverAutosave,
+    requestExportImage, exportImage, saveProject, exportPsd, exportSvg, exportEps, recoverAutosave,
     onFileSelected, onViewChange, transferLayers, onTransferDrop, undo, redo,
   }
 }
